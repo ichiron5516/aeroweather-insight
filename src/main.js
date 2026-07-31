@@ -25,7 +25,7 @@ const AZ = m => m * ALT_SCALE;        // 高度にこれを通す
 
 // ---- Step 1: 飛行経路 ----
 async function loadFlightRoute() {
-  const res = await fetch('/data/flight_route.json');
+  const res = await fetch('./data/flight_route.json');
   const flight = await res.json();
   const positions = flight.route.flatMap(p => [p.lon, p.lat, AZ(p.alt_m)]);
   // ホバー表示用に各点を記録（AZ適用済みの3D座標と実高度のペア）
@@ -80,7 +80,7 @@ const riskColor = {
 const riskLabel = { low: 'リスク低', medium: '注意', high: '警戒' };
 
 async function loadAirports() {
-  const res = await fetch('/data/metar_taf.json');
+  const res = await fetch('./data/metar_taf.json');
   const airports = await res.json();
 
   for (const [icao, ap] of Object.entries(airports)) {
@@ -111,7 +111,7 @@ async function loadAirports() {
 
 // ---- Step 3: 前線・雲域 ----
 async function loadWeather() {
-  const fronts = await Cesium.GeoJsonDataSource.load('/data/fronts.geojson', {
+  const fronts = await Cesium.GeoJsonDataSource.load('./data/fronts.geojson', {
     clampToGround: true,
   });
   viewer.dataSources.add(fronts);
@@ -203,7 +203,7 @@ async function loadWeather() {
     }
   }
 
-  const clouds = await Cesium.GeoJsonDataSource.load('/data/clouds.geojson');
+  const clouds = await Cesium.GeoJsonDataSource.load('./data/clouds.geojson');
   viewer.dataSources.add(clouds);
   clouds.show = fbjpOn;
   fbjpItems.push(clouds);
@@ -234,7 +234,7 @@ function ellipseShape(width, height, granularity = 24) {
 }
 
 async function loadUpperAir() {
-  const res = await fetch('/data/jetstream.geojson');
+  const res = await fetch('./data/jetstream.geojson');
   const jet = await res.json();
 
   for (const f of jet.features) {
@@ -300,7 +300,7 @@ async function loadUpperAir() {
     fbjpItems.push(jlabel);
   }
 
-  const res2 = await fetch('/data/turbulence.json');
+  const res2 = await fetch('./data/turbulence.json');
   const turb = await res2.json();
 
   for (const a of turb.areas) {
@@ -337,7 +337,7 @@ async function loadUpperAir() {
 
 // ---- Step 5: 教育用コメント（！マーカー） ----
 async function loadComments() {
-  const res = await fetch('/data/comments.json');
+  const res = await fetch('./data/comments.json');
   const data = await res.json();
 
   for (const c of data.comments) {
@@ -442,7 +442,7 @@ function refreshUpper() {
 
 async function loadUpperLevels() {
   upperHoverPts = [];
-  const res = await fetch('/data/upper_levels.geojson');
+  const res = await fetch('./data/upper_levels.geojson');
   const geo = await res.json();
 
   for (const f of geo.features) {
@@ -694,7 +694,7 @@ async function loadHimawari3D() {
       const img = new Image();
       img.onload = () => { ctx.drawImage(img, i * SIZE, j * SIZE); ok(); };
       img.onerror = ng;
-      img.src = `/data/himawari/${Z}_${x}_${y}.jpg`;
+      img.src = `./data/himawari/${Z}_${x}_${y}.jpg`;
     }))
   ));
 
@@ -845,10 +845,10 @@ function inPoly(lon, lat, ring) {
 
 async function drawProfile() {
   const [flight, clouds, turb, jet] = await Promise.all([
-    fetch('/data/flight_route.json').then(r => r.json()),
-    fetch('/data/clouds.geojson').then(r => r.json()),
-    fetch('/data/turbulence.json').then(r => r.json()),
-    fetch('/data/jetstream.geojson').then(r => r.json()),
+    fetch('./data/flight_route.json').then(r => r.json()),
+    fetch('./data/clouds.geojson').then(r => r.json()),
+    fetch('./data/turbulence.json').then(r => r.json()),
+    fetch('./data/jetstream.geojson').then(r => r.json()),
   ]);
 
   // --- 経路を約10km間隔でサンプリング ---
@@ -1000,7 +1000,7 @@ async function reloadAll() {
   ]);
   loadFlRings();
   loadUpperLevels();
-  
+  buildSurfaces();
 }
 
 
@@ -1142,7 +1142,7 @@ async function buildSurfaces() {
   if (surfaceMode === 'off') return;
 
   if (!surfaceData) {
-    const res = await fetch('/data/upper_surfaces.json');
+    const res = await fetch('./data/upper_surfaces.json');
     surfaceData = await res.json();
   }
   if (my !== buildSeq) return;    // ★自分より新しい呼び出しが始まっていたら、何も作らず終了
@@ -1261,13 +1261,19 @@ async function buildSurfaces() {
 function setSurfaceMode(mode) {
   surfaceMode = (surfaceMode === mode) ? 'off' : mode;
   buildSurfaces();
-  document.getElementById('surfHeightBtn').textContent = surfaceMode === 'height' ? '面:高度 表示中' : '面:高度';
-  document.getElementById('surfTempBtn').textContent   = surfaceMode === 'temp'   ? '面:気温 表示中' : '面:気温';
-  document.getElementById('surfWindBtn').textContent   = surfaceMode === 'wind'   ? '面:風速 表示中' : '面:風速';
+const b1 = document.getElementById('surfHeightBtn');
+  if (b1) b1.textContent = surfaceMode === 'height' ? '面:高度 表示中' : '面:高度';
+  const b2 = document.getElementById('surfTempBtn');
+  if (b2) b2.textContent = surfaceMode === 'temp' ? '面:気温 表示中' : '面:気温';
+  const b3 = document.getElementById('surfWindBtn');
+  if (b3) b3.textContent = surfaceMode === 'wind' ? '面:風速 表示中' : '面:風速';
 }
-document.getElementById('surfHeightBtn').onclick = () => setSurfaceMode('height');
-document.getElementById('surfTempBtn').onclick   = () => setSurfaceMode('temp');
-document.getElementById('surfWindBtn').onclick   = () => setSurfaceMode('wind');
+const _sh = document.getElementById('surfHeightBtn');
+if (_sh) _sh.onclick = () => setSurfaceMode('height');
+const _st = document.getElementById('surfTempBtn');
+if (_st) _st.onclick = () => setSurfaceMode('temp');
+const _sw = document.getElementById('surfWindBtn');
+if (_sw) _sw.onclick = () => setSurfaceMode('wind');
 
 // 高度25倍ボタン・面ボタンの後で作り直す（自己完結のフック）
 ['exagBtn','chart850Btn','chart700Btn','chart500Btn','chart300Btn'].forEach(id => {
