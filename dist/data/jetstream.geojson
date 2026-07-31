@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "label": "ジェット気流 FL400", "alt_m": 12200, "wind_kt": null },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [118.0, 36.3], [121.0, 36.9], [124.0, 37.2], [127.0, 37.2], [129.5, 37.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "label": "ジェット気流 FL390", "alt_m": 11900, "wind_kt": null },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [133.5, 41.9], [136.0, 41.4], [139.0, 40.9], [142.0, 40.3],
+          [145.0, 39.6], [148.0, 38.7]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <link rel="stylesheet" href="/aeroweather-insight/cesium/Widgets/widgets.css">
+    <script src="/aeroweather-insight/cesium/Cesium.js"></script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AeroWeather Insight</title>
+    <style>
+      html, body { margin: 0; padding: 0; }
+
+      /* ---- 情報パネル共通 ---- */
+      .panel {
+        position: absolute;
+        top: 10px; right: 10px;
+        width: 340px;
+        max-height: 85vh;
+        overflow-y: auto;
+        background: rgba(20, 30, 45, 0.92);
+        color: #fff;
+        font-family: "Meiryo", sans-serif;
+        font-size: 13px;
+        border-radius: 8px;
+        padding: 14px;
+        display: none;
+        z-index: 20;
+      }
+      .panel h2 { font-size: 16px; margin: 0 0 8px; }
+      .panel h3 { font-size: 13px; margin: 12px 0 4px; color: #8fd0ff; }
+      .panel pre {
+        white-space: pre-wrap; word-break: break-all;
+        background: rgba(0,0,0,0.4); padding: 8px;
+        border-radius: 4px; font-size: 12px; margin: 0;
+      }
+      .risk-badge {
+        display: inline-block; padding: 2px 10px;
+        border-radius: 10px; font-weight: bold; font-size: 12px;
+      }
+      .risk-low    { background: #2e7d32; }
+      .risk-medium { background: #b58900; }
+      .risk-high   { background: #c62828; }
+      .closeBtn {
+        float: right; cursor: pointer;
+        background: none; border: none; color: #aaa; font-size: 16px;
+      }
+      #commentPanel { border-left: 4px solid #ffb300; }
+      #cBasis { color: #ffd54f; font-size: 12px; }
+
+      /* ---- 断面図パネル ---- */
+      #profilePanel {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        bottom: 40px; z-index: 15;
+        background: rgba(20, 30, 45, 0.92);
+        border-radius: 8px; padding: 8px 10px 4px;
+        display: none;
+      }
+      #profilePanel .cap {
+        font-family: "Meiryo", sans-serif; font-size: 11px; color: #9fb3c8;
+        padding: 2px 2px 4px;
+      }
+
+      /* ---- ホバーツールチップ ---- */
+      #altTip {
+        position: absolute; z-index: 30;
+        background: rgba(20, 30, 45, 0.95); color: #00e5ff;
+        font-family: "Meiryo", sans-serif; font-size: 12px; font-weight: bold;
+        border: 1px solid #00e5ff; border-radius: 4px;
+        padding: 3px 8px;
+        pointer-events: none;
+        display: none;
+      }
+
+      /* ---- FBJP原図パネル ---- */
+      #fbjpPanel {
+        position: absolute; top: 100px; left: 10px; z-index: 20;
+        background: #fff; border-radius: 8px; padding: 8px;
+        display: none; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      }
+      #fbjpPanel img { width: 520px; display: block; }
+      #fbjpPanel .cap { font-family: "Meiryo", sans-serif; font-size: 11px; color: #333; padding-top: 4px; }
+
+      /* ---- タイトル・凡例 ---- */
+      #titleBar {
+        position: absolute; top: 10px; left: 10px; z-index: 10;
+        background: rgba(20, 30, 45, 0.85); color: #fff;
+        font-family: "Meiryo", sans-serif;
+        border-radius: 8px; padding: 10px 16px;
+      }
+      #titleBar h1 { font-size: 18px; margin: 0; }
+      #titleBar .sub { font-size: 11px; color: #ffd54f; margin-top: 4px; }
+      #legend {
+        position: absolute; bottom: 130px; left: 10px; z-index: 10;
+        background: rgba(20, 30, 45, 0.85); color: #fff;
+        font-family: "Meiryo", sans-serif; font-size: 12px;
+        border-radius: 8px; padding: 10px 14px; line-height: 1.9;
+      }
+      .chip {
+        display: inline-block; width: 22px; height: 4px;
+        vertical-align: middle; margin-right: 6px; border-radius: 2px;
+      }
+      .dot {
+        display: inline-block; width: 10px; height: 10px;
+        vertical-align: middle; margin-right: 6px; border-radius: 50%;
+      }
+
+      /* ---- ボタン群（視点／レイヤ／表示の3段） ---- */
+      #camButtons {
+        position: absolute; bottom: 40px; right: 10px; z-index: 10;
+        display: flex; flex-direction: column; gap: 6px;
+        align-items: flex-end;
+      }
+      .btnRow {
+        display: flex; gap: 6px; align-items: center;
+      }
+      .rowLabel {
+        font-family: "Meiryo", sans-serif; font-size: 10px;
+        color: #8fd0ff; margin-right: 2px;
+        text-shadow: 0 0 4px #000;
+      }
+      #camButtons button {
+        background: rgba(20, 30, 45, 0.9); color: #fff;
+        border: 1px solid #8fd0ff; border-radius: 6px;
+        font-family: "Meiryo", sans-serif; font-size: 12px;
+        padding: 7px 10px; cursor: pointer;
+        white-space: nowrap;
+      }
+      #camButtons button:hover { background: #1e3a5f; }
+    </style>
+    <script type="module" crossorigin src="/aeroweather-insight/assets/index-CcPWvr2W.js"></script>
+    <link rel="stylesheet" crossorigin href="/aeroweather-insight/assets/index-B9DDZdqH.css">
+  </head>
+  <body>
+    <div id="cesiumContainer" style="width:100vw; height:100vh;"></div>
+
+    <!-- 空港パネル -->
+    <div id="infoPanel" class="panel">
+      <button class="closeBtn" data-close>×</button>
+      <h2 id="apName"></h2>
+      <span id="apRisk" class="risk-badge"></span>
+      <h3>概要（教育用要約）</h3>
+      <div id="apSummary"></div>
+      <h3>METAR（実況）</h3>
+      <pre id="apMetar"></pre>
+      <h3>TAF（予報）</h3>
+      <pre id="apTaf"></pre>
+    </div>
+
+    <!-- 教育コメントパネル -->
+    <div id="commentPanel" class="panel">
+      <button class="closeBtn" data-close>×</button>
+      <h2 id="cTitle"></h2>
+      <h3>なぜ注意が必要か</h3>
+      <div id="cWhy"></div>
+      <h3>根拠資料</h3>
+      <div id="cBasis"></div>
+    </div>
+
+    <!-- 断面図パネル -->
+    <div id="profilePanel">
+      <canvas id="profileCanvas"></canvas>
+      <div class="cap" id="profileCap"></div>
+    </div>
+
+    <!-- ホバーツールチップ -->
+    <div id="altTip"></div>
+
+    <!-- FBJP原図パネル -->
+    <div id="fbjpPanel">
+      <img id="fbjpImg" src="" alt="国内悪天予想図（FBJP）" />
+      <div class="cap">国内悪天予想図（FBJP） 出典：気象庁</div>
+    </div>
+
+    <!-- タイトル・免責 -->
+    <div id="titleBar">
+      <h1>AeroWeather Insight</h1>
+      <div class="sub">教育用プロトタイプ — 実運航の判断には使用できません</div>
+    </div>
+
+    <!-- 凡例 -->
+    <div id="legend">
+      <div><span class="chip" style="background:#00e5ff"></span>飛行経路（RJBB→RJCC）</div>
+      <div><span class="chip" style="background:linear-gradient(90deg,#c62828 50%,#1565c0 50%)"></span>停滞前線
+           <span class="chip" style="background:#1565c0; margin-left:10px"></span>寒冷前線
+           <span class="chip" style="background:#c62828; margin-left:6px"></span>温暖前線</div>
+      <div><span class="chip" style="background:#9575cd"></span>ジェット気流
+           <span class="dot" style="background:#ffa726; margin-left:10px"></span>乱気流予想域（CAT）</div>
+      <div><span class="chip" style="background:#eceff1"></span>等高度線
+           <span class="chip" style="background:#ef5350; margin-left:10px"></span>等温線
+           <span class="dot" style="background:#4db6ac; margin-left:10px"></span>湿潤域</div>
+      <div><span class="dot" style="background:#ffd700"></span>！ 教育コメント
+           <span class="dot" style="background:#66bb6a; margin-left:10px"></span>空港：<span style="color:#a5d6a7">低</span> /
+           <span style="color:#ffe082">注意</span> / <span style="color:#ef9a9a">警戒</span></div>
+      <div><span class="dot" style="background:#eee"></span>実況雲（ひまわり雲頂強調・気象庁）</div>
+      <div style="font-size:10px; color:#999; margin-top:4px">出典：気象庁 / NOAA AWC / ADS-B航跡データ</div>
+    </div>
+
+    <!-- カメラプリセット＋レイヤ操作 -->
+    <div id="camButtons">
+      <div class="btnRow">
+        <span class="rowLabel">視点</span>
+        <button data-cam="all">全体</button>
+        <button data-cam="dep">出発地</button>
+        <button data-cam="turb">巡航</button>
+        <button data-cam="arr">目的地</button>
+        <button data-cam="sat">衛星視点</button>
+        <button data-cam="hero">高度強調</button>
+      </div>
+      <div class="btnRow">
+        <span class="rowLabel">レイヤ</span>
+        <button id="himawariBtn">☁ 衛星画像</button>
+        <button id="sat3dBtn">☁ 衛星3D雲</button>
+        <button id="fbjpLayerBtn">悪天予想図ON</button>
+        <button id="chart850Btn">850面ON</button>
+        <button id="chart700Btn">700面ON</button>
+        <button id="chart500Btn">500面ON</button>
+        <button id="chart300Btn">300面ON</button>
+      </div>
+      <div class="btnRow">
+        <span class="rowLabel">表示</span>
+        <button id="profileBtn">断面図</button>
+        <button id="exagBtn">高度25倍</button>
+        <button id="curtainBtn">カーテンON</button>
+        <button id="flRingBtn">高度目盛ON</button>
+        <!-- <button id="surfHeightBtn">面:高度</button>
+        <button id="surfTempBtn">面:気温</button>
+        <button id="surfWindBtn">面:風速</button> -->
+      </div>
+    </div>
+
+  </body>
+</html>

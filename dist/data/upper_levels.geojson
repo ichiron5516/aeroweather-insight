@@ -1,0 +1,125 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "fl": 50, "level": "850hPa", "type": "wet_area", "label": "850hPa 湿潤域（梅雨前線帯）", "hover": "850hPa 湿潤域（T-Td<3℃）" },
+      "geometry": { "type": "Polygon", "coordinates": [[
+        [128.0, 32.5], [132.0, 33.5], [135.5, 34.0], [138.5, 33.5],
+        [141.0, 32.5], [140.5, 31.5], [136.0, 32.3], [131.5, 32.0],
+        [128.0, 31.7], [128.0, 32.5]
+      ]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 50, "level": "850hPa", "type": "height_contour", "label": "850hPa 1500m", "hover": "850hPa 等高度線 1500m" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [123.0, 33.0], [127.0, 33.5], [131.0, 33.8], [135.0, 33.5],
+        [139.0, 32.8], [143.0, 32.0], [147.0, 31.5]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 50, "level": "850hPa", "type": "height_contour", "label": "850hPa 1440m", "hover": "850hPa 等高度線 1440m" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [123.0, 39.5], [128.0, 40.0], [133.0, 40.5], [138.0, 40.5],
+        [143.0, 40.0], [147.0, 39.3]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 50, "level": "850hPa", "type": "isotherm", "label": "850hPa 21℃", "hover": "850hPa 等温線 21℃（梅雨前線の目安）" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [123.0, 32.0], [128.0, 32.8], [133.0, 33.2], [137.0, 32.8],
+        [141.0, 32.2], [145.0, 31.5]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 100, "level": "700hPa", "type": "wet_area", "label": "700hPa 湿潤域", "hover": "700hPa 湿潤域（T-Td<3℃）" },
+      "geometry": { "type": "Polygon", "coordinates": [[
+        [129.0, 33.0], [133.0, 34.2], [136.5, 34.5], [139.5, 33.8],
+        [141.5, 32.8], [140.0, 31.8], [135.5, 32.8], [130.5, 32.2],
+        [129.0, 33.0]
+      ]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 100, "level": "700hPa", "type": "height_contour", "label": "700hPa 3000m", "hover": "700hPa 等高度線 3000m" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [123.0, 36.5], [128.0, 37.2], [133.0, 37.5], [138.0, 37.3],
+        [143.0, 36.7], [147.0, 36.0]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 180, "level": "500hPa", "type": "height_contour", "label": "500hPa 5700m", "hover": "500hPa 等高度線 5700m（日本海の谷に対応）" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [124.0, 42.5], [128.0, 41.0], [132.0, 40.0], [136.0, 40.2],
+        [140.0, 41.0], [144.0, 42.0], [147.0, 42.8]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 180, "level": "500hPa", "type": "height_contour", "label": "500hPa 5820m", "hover": "500hPa 等高度線 5820m" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [123.0, 33.5], [127.0, 34.0], [131.0, 34.3], [135.0, 34.2],
+        [139.0, 33.6], [143.0, 32.8], [147.0, 32.0]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 180, "level": "500hPa", "type": "isotherm", "label": "500hPa -6℃", "hover": "500hPa 等温線 -6℃" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [123.0, 37.5], [128.0, 38.2], [133.0, 38.6], [138.0, 38.4],
+        [143.0, 37.8], [147.0, 37.0]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 180, "level": "500hPa", "type": "trough", "label": "500hPa 気圧の谷", "hover": "500hPa トラフ（気圧の谷）" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [133.0, 46.0], [132.0, 42.0], [131.5, 38.0]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 300, "level": "300hPa", "type": "height_contour", "label": "300hPa 9600m", "hover": "300hPa 等高度線 9600m" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [124.0, 41.5], [128.0, 40.5], [132.0, 39.8], [136.0, 39.8],
+        [140.0, 40.2], [144.0, 41.0], [147.0, 41.8]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 300, "level": "300hPa", "type": "height_contour", "label": "300hPa 9720m", "hover": "300hPa 等高度線 9720m" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [123.0, 34.0], [127.0, 34.6], [131.0, 35.0], [135.0, 34.8],
+        [139.0, 34.2], [143.0, 33.4], [147.0, 32.6]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 300, "level": "300hPa", "type": "strong_wind", "label": "300hPa 強風域（60kt以上）", "hover": "300hPa 強風域 60kt以上" },
+      "geometry": { "type": "Polygon", "coordinates": [[
+        [130.0, 39.0], [134.0, 39.8], [138.0, 39.8], [142.0, 39.2],
+        [146.0, 38.2], [146.0, 36.8], [142.0, 37.8], [138.0, 38.3],
+        [134.0, 38.3], [130.0, 37.5], [130.0, 39.0]
+      ]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 340, "level": "250hPa", "type": "jet_axis", "label": "250hPa ジェット軸", "hover": "250hPa ジェット軸" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [130.0, 40.5], [134.0, 41.0], [138.0, 40.8], [142.0, 40.2], [146.0, 39.4]
+      ] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fl": 390, "level": "200hPa", "type": "jet_axis", "label": "200hPa ジェット軸", "hover": "200hPa ジェット軸" },
+      "geometry": { "type": "LineString", "coordinates": [
+        [129.0, 41.5], [133.5, 41.8], [138.0, 41.2], [142.0, 40.4], [146.5, 39.5]
+      ] }
+    }
+  ]
+}

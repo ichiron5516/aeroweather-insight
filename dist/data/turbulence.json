@@ -1,0 +1,13 @@
+{
+  "areas": [
+    {
+      "label": "① CAT（JET FRONT・VWS）",
+      "lat": 40.7, "lon": 142.3,
+      "alt_bottom_m": 10100, "alt_top_m": 11300,
+      "radius_x_m": 300000, "radius_y_m": 150000,
+      "severity": "MOD",
+      "reason": "FL390ジェットに伴うジェット前線と鉛直ウィンドシア（VWS）によるCAT。FL330〜FL370。東へ30ktで移動。北東北〜三陸沖で飛行経路と交差する。",
+      "basis": "FBJP 060600UTC ①"
+    }
+  ]
+}
