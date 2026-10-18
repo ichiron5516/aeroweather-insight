@@ -1,0 +1,14 @@
+RJCC VOR RWY19L: FAF（名前付き）なし：最終進入は概略
+RJCC VOR RWY19R: FAF（名前付き）なし：最終進入は概略
+RJCC VOR A: FAF（名前付き）なし：最終進入は概略
+RJFK VOR RWY34: FAF（名前付き）なし：最終進入は概略
+RJFM RNP Z RWY09 (AR): FAF（名前付き）なし：最終進入は概略
+RJFM RNP Y RWY09 (AR): FAF（名前付き）なし：最終進入は概略
+RJFM RNP X RWY09 (AR): FAF（名前付き）なし：最終進入は概略
+RJFM RNP RWY27 (AR): FAF（名前付き）なし：最終進入は概略
+RJTT LDA Z RWY22: CON の座標不明（除外）
+RJTT LDA X RWY22: FAF BONDO が THR から 19.9NM
+RJTT LDA W RWY22: CON の座標不明（除外）
+RJTT LDA Z RWY23: TUM の座標不明（除外）
+RJTT LDA W RWY23: TUM の座標不明（除外）
+RJTT RNP RWY23 (AR): FAF（名前付き）なし：最終進入は概略

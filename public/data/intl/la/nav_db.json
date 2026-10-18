@@ -1,0 +1,672 @@
+{
+ "meta": {
+  "title": "ラオス 航法データ",
+  "sources": [
+   "AIP Lao PDR ENR 3.2（AIRAC AIP AMDT 12/15・13/15、ENR 3.2-5/7 は 31 MAR 2016）"
+  ],
+  "note": "ユーザーから受け取った紙面の写真から読み取り。UBL は Bangkok FIR の地点（B202 の起点）",
+  "aipEffective": "2016-03-31"
+ },
+ "fixes": {
+  "BUTRA": {
+   "lat": 15.416667,
+   "lon": 105.6,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "PAPRA": {
+   "lat": 15.766667,
+   "lon": 107.183333,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "SAV": {
+   "lat": 16.562139,
+   "lon": 104.766667,
+   "type": "navaid",
+   "country": "LA",
+   "reporting": "COMPULSORY",
+   "name": "SAVANNAKHET",
+   "navaidType": "DVOR/DME"
+  },
+  "VILAO": {
+   "lat": 17.366667,
+   "lon": 106.083333,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "LPB": {
+   "lat": 19.910972,
+   "lon": 102.171917,
+   "type": "navaid",
+   "country": "LA",
+   "reporting": "COMPULSORY",
+   "name": "LUANG PRABANG",
+   "navaidType": "DVOR/DME"
+  },
+  "NOHET": {
+   "lat": 19.426667,
+   "lon": 103.611389,
+   "type": "waypoint",
+   "country": "LA"
+  },
+  "NALAO": {
+   "lat": 19.329444,
+   "lon": 103.905,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "PONUK": {
+   "lat": 20.315,
+   "lon": 100.388333,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "SAGAG": {
+   "lat": 21.191667,
+   "lon": 101.623333,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "UBL": {
+   "lat": 15.245278,
+   "lon": 104.865833,
+   "type": "navaid",
+   "country": "LA",
+   "reporting": "COMPULSORY",
+   "name": "UBON",
+   "navaidType": "DVOR/DME"
+  },
+  "PAK": {
+   "lat": 15.19675,
+   "lon": 105.738056,
+   "type": "navaid",
+   "country": "LA",
+   "reporting": "COMPULSORY",
+   "name": "PAKSE",
+   "navaidType": "DVOR/DME"
+  },
+  "BOMPA": {
+   "lat": 14.333333,
+   "lon": 107.4,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "AKSAG": {
+   "lat": 20.816667,
+   "lon": 100.466667,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "LADON": {
+   "lat": 21.103611,
+   "lon": 102.966944,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "VTN": {
+   "lat": 18.010361,
+   "lon": 102.540472,
+   "type": "navaid",
+   "country": "LA",
+   "reporting": "COMPULSORY",
+   "name": "VIENTIANE",
+   "navaidType": "DVOR/DME"
+  },
+  "LEKOB": {
+   "lat": 14.13,
+   "lon": 105.52,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "YAKUA": {
+   "lat": 17.7375,
+   "lon": 101.514444,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "LAPON": {
+   "lat": 20.75,
+   "lon": 104.475,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "NOBOK": {
+   "lat": 20.622222,
+   "lon": 102.640556,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "ANBOK": {
+   "lat": 18.616667,
+   "lon": 101.216667,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "TOMIP": {
+   "lat": 19.183333,
+   "lon": 101.266667,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "ISGAK": {
+   "lat": 16.529167,
+   "lon": 105.4375,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "LEBAL": {
+   "lat": 16.503056,
+   "lon": 105.945,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "TORED": {
+   "lat": 16.463611,
+   "lon": 106.675556,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "ALPHA": {
+   "lat": 18.543333,
+   "lon": 103.328333,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "IDOTA": {
+   "lat": 18.693333,
+   "lon": 105.139444,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "LAVOS": {
+   "lat": 20.441389,
+   "lon": 104.393611,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "LAVAN": {
+   "lat": 14.096944,
+   "lon": 105.693333,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "SEKON": {
+   "lat": 14.867778,
+   "lon": 106.376111,
+   "type": "waypoint",
+   "country": "LA"
+  },
+  "KADIN": {
+   "lat": 18.45,
+   "lon": 104.0,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "TANGO": {
+   "lat": 17.425,
+   "lon": 104.905,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  },
+  "ABMSAV": {
+   "lat": 16.855833,
+   "lon": 105.243889,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY",
+   "name": "ABM/SAV (Abeam SAV)"
+  },
+  "DELTA": {
+   "lat": 16.0,
+   "lon": 105.75,
+   "type": "waypoint",
+   "country": "LA",
+   "reporting": "COMPULSORY"
+  }
+ },
+ "airways": {
+  "A1": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "BUTRA",
+    "PAPRA"
+   ],
+   "segments": [
+    {
+     "nm": 93.9,
+     "aipNm": 94,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  },
+  "A202": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "SAV",
+    "VILAO"
+   ],
+   "segments": [
+    {
+     "nm": 89.7,
+     "aipNm": 90,
+     "upper": "FL460",
+     "lower": "FL260"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  },
+  "A206": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "LPB",
+    "NOHET",
+    "NALAO"
+   ],
+   "segments": [
+    {
+     "nm": 86.4,
+     "aipNm": 87,
+     "upper": "FL460",
+     "lower": "FL260"
+    },
+    {
+     "nm": 17.6,
+     "aipNm": 17,
+     "upper": "FL460",
+     "lower": "FL260"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "A581": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "PONUK",
+    "SAGAG"
+   ],
+   "segments": [
+    {
+     "nm": 87.1,
+     "aipNm": 87,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "B202": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "UBL",
+    "PAK",
+    "BOMPA"
+   ],
+   "segments": [
+    {
+     "nm": 50.6,
+     "aipNm": 50,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 109.5,
+     "aipNm": 110,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  },
+  "B214": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "AKSAG",
+    "LADON"
+   ],
+   "segments": [
+    {
+     "nm": 141.2,
+     "aipNm": 141,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  },
+  "B218": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "SAGAG",
+    "LPB",
+    "VTN"
+   ],
+   "segments": [
+    {
+     "nm": 82.8,
+     "aipNm": 83,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 116.0,
+     "aipNm": 115,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "B329": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "LEKOB",
+    "PAK",
+    "VILAO"
+   ],
+   "segments": [
+    {
+     "nm": 65.3,
+     "aipNm": 65,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 131.8,
+     "aipNm": 131,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  },
+  "B346": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "YAKUA",
+    "LPB"
+   ],
+   "segments": [
+    {
+     "nm": 135.7,
+     "aipNm": 135,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "B465": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "AKSAG",
+    "LPB",
+    "LAPON"
+   ],
+   "segments": [
+    {
+     "nm": 110.3,
+     "aipNm": 110,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 139.1,
+     "aipNm": 140,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "B468": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "LPB",
+    "NOBOK",
+    "LADON"
+   ],
+   "segments": [
+    {
+     "nm": 50.2,
+     "aipNm": 51,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 34.2,
+     "aipNm": 34,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "R207": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "ANBOK",
+    "VTN"
+   ],
+   "segments": [
+    {
+     "nm": 83.8,
+     "aipNm": 84,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "R215": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "TOMIP",
+    "LPB"
+   ],
+   "segments": [
+    {
+     "nm": 67.3,
+     "aipNm": 66,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "R328": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "SAV",
+    "ISGAK",
+    "LEBAL",
+    "TORED"
+   ],
+   "segments": [
+    {
+     "nm": 38.7,
+     "aipNm": 39,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 29.3,
+     "aipNm": 30,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 42.1,
+     "aipNm": 42,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  },
+  "R335": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "VTN",
+    "ALPHA",
+    "IDOTA"
+   ],
+   "segments": [
+    {
+     "nm": 55.2,
+     "aipNm": 55,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 103.4,
+     "aipNm": 104,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  },
+  "R474": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "VTN",
+    "NOHET",
+    "LAVOS"
+   ],
+   "segments": [
+    {
+     "nm": 104.6,
+     "aipNm": 105,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 75.2,
+     "aipNm": 75,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 124.10 MHz"
+  },
+  "R575": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "LAVAN",
+    "SEKON",
+    "PAPRA"
+   ],
+   "segments": [
+    {
+     "nm": 61.0,
+     "aipNm": 61,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 71.4,
+     "aipNm": 71,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  },
+  "W76": {
+   "type": "CONVENTIONAL",
+   "points": [
+    "VTN",
+    "ALPHA",
+    "KADIN",
+    "TANGO",
+    "ABMSAV",
+    "DELTA",
+    "PAK"
+   ],
+   "segments": [
+    {
+     "nm": 55.2,
+     "aipNm": 55,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 38.7,
+     "aipNm": 39,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 80.4,
+     "aipNm": 80,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 39.3,
+     "aipNm": 39,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 59.1,
+     "aipNm": 59,
+     "upper": "FL460",
+     "lower": "FL200"
+    },
+    {
+     "nm": 48.2,
+     "aipNm": 48,
+     "upper": "FL460",
+     "lower": "FL200"
+    }
+   ],
+   "country": "LA",
+   "atc": "Vientiane ACC 128.30 MHz"
+  }
+ }
+}

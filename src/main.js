@@ -1,5 +1,20 @@
 import * as Cesium from 'cesium';
+import { installGpvRouter } from './gpvSource/omShim.js';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
+import { initAdvisor } from './advisor/advisor.js';
+import { initAipPanel } from './aipImport/aipPanel.js';
+import { createMountains3D } from './mountains3D.js';
+import { createFirLayer } from './firLayer.js';
+import { createGridLayer } from './gridLayer.js';
+import { createVarLayer } from './varLayer.js';
+import { createNavLayer } from './navLayer.js';
+import { createAirspaceLayer } from './airspaceLayer.js';
+import { createGpvPanel } from './gpvLayer.js';
+import { createSigwxPanel } from './sigwxLayer.js';
+import { CloudOnlyImageryProvider, CLOUD_ONLY } from './wxPanels/cloudOnly.js';
+
+// GPV（Open-Meteo の書式の問い合わせ）を京都大学 RISH の気象庁 GSM で答える。読めなければ Open-Meteo（2026-10-18）
+installGpvRouter();
 
 Cesium.Ion.defaultAccessToken = import.meta.env.VITE_ION_TOKEN;
 const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -8,12 +23,22 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
   animation: true,
   infoBox: false,
   selectionIndicator: true,
+  baseLayerPicker: false,   // 右上の地図（レイヤ）切替ボタンは使わない
 });
 window.viewer = viewer;   // 開発用：Consoleからカメラ位置を取得するため
 window.Cesium = Cesium;   // 同上
 
+// ---- 揺れ回避 経路アドバイス（リアルタイム気象で登録経路を採点） ----
+const advisorReady = initAdvisor(viewer);
+// AIP 取り込みパネル（「航法」の段の「📥 AIP取込」）
+initAipPanel(document.getElementById('aipBtn'));
+
 // ---- 高度誇張モード ----
-let ALT_SCALE = 1;                    // 1 = 実寸、25 = 誇張
+const EXAG_CHOICES = [25, 50, 75, 100];   // 選べる誇張倍率（右下の「高度」ボタン）
+let ALT_EXAG = 25;                        // 誇張するときの倍率（最後に選んだもの。初期値25。3D 表示はすべてこの倍率から始める）
+window.AW_EXAG = ALT_EXAG;                // 実寸から自動で誇張に切り替える処理（雲・山・天気図）もこの倍率を使う
+let ALT_SCALE = 1;                    // 1 = 実寸、ALT_EXAG = 誇張
+let CASE_MODE = false;   // false = リアルタイム（初期画面）、true = 2026-07-06 関西→新千歳の事例を表示
 let fbjpOn = false;        // 予想図レイヤの表示状態
 let fbjpItems = [];       // FBJP由来の表示物のリスト
 let curtainEntity = null;
@@ -418,6 +443,122 @@ document.getElementById('flRingBtn').onclick = () => {
     flRingOn ? '高度目盛OFF' : '高度目盛ON';
 };
 
+// ---- FIR（飛行情報区）の境界線 ----
+const firLayer = createFirLayer(viewer);
+document.getElementById('firBtn').onclick = async () => {
+  const b = document.getElementById('firBtn');
+  try {
+    await firLayer.setVisible(!firLayer.on);
+    b.textContent = firLayer.on ? 'FIR境界OFF' : 'FIR境界ON';
+  } catch (e) { console.warn('[FIR]', e); b.textContent = 'FIR境界（読込失敗）'; }
+};
+
+// ---- 緯度・経度の線 ----
+const gridLayer = createGridLayer(viewer);
+document.getElementById('gridBtn').onclick = () => {
+  const b = document.getElementById('gridBtn');
+  gridLayer.setVisible(!gridLayer.on);
+  b.textContent = gridLayer.on ? '緯度経度線OFF' : '緯度経度線ON';
+  b.classList.toggle('on', gridLayer.on);
+};
+
+// ---- 磁気偏差（Variation）の等偏角線 ----
+const varLayer = createVarLayer(viewer);
+document.getElementById('varBtn').onclick = () => {
+  const b = document.getElementById('varBtn');
+  varLayer.setVisible(!varLayer.on);
+  b.textContent = varLayer.on ? 'Variation OFF' : 'Variation ON';
+  b.classList.toggle('on', varLayer.on);
+};
+
+// ---- 航法データ（日本国内の航空路・Waypoint・VOR/DME・TACAN） ----
+const navLayer = createNavLayer(viewer);
+async function setNavVisible(v) {
+  const b = document.getElementById('navBtn');
+  if (v === navLayer.on) return;
+  b.textContent = '✈ 読み込み中…';
+  try {
+    await navLayer.setVisible(v);
+    b.textContent = navLayer.on ? '✈ 航法データ非表示' : '✈ 航法データ表示';
+    b.classList.toggle('on', navLayer.on);
+    document.getElementById('navLegend').classList.toggle('on', navLayer.on);
+    const s = navLayer.stats;
+    if (s) b.title = `航空路 ${s.airways}本（${s.segments}区間）・無線施設 ${s.navaid}・義務通報点 ${s.compulsory}・任意通報点 ${s.waypoint}・手順地点 ${s.terminal}・空港 ${s.airport}。記号や航空路をクリックすると詳細`;
+  } catch (e) { console.warn('[nav]', e); b.textContent = '✈ 航法データ（読込失敗）'; }
+}
+document.getElementById('navBtn').onclick = () => setNavVisible(!navLayer.on);
+// 経路アドバイスの「経路を作る」BOX から使う
+window.awNav = { setVisible: setNavVisible, onPick: fn => navLayer.onPick(fn), get on() { return navLayer.on; } };
+
+// ---- 衛星雲頂3D（ひまわり赤外の雲頂温度 → 雲頂の高さ。アニメ風の雲・エコーの所は積乱雲）。処理は chartsPanel.js ----
+{
+  const b = document.getElementById('ct3dBtn'), st = document.getElementById('ct3dSt');
+  b.onclick = async () => {
+    if (!window.awCloudTop3D) { st.textContent = '天気図パネルの準備中です。少し待ってから押してください。'; return; }
+    b.disabled = true;
+    try {
+      const on = await window.awCloudTop3D.set(!window.awCloudTop3D.on);
+      b.classList.toggle('on', on); b.textContent = on ? '☁ 衛星雲頂3D 消す' : '☁ 衛星雲頂3D';
+      if (!on) st.textContent = '';
+    } catch (e) { console.warn('[cloud top 3D]', e); st.textContent = `雲頂3Dを表示できませんでした（${e.message}）`; }
+    b.disabled = false;
+  };
+  window.addEventListener('aw:ct3d', e => { if (window.awCloudTop3D?.on || !e.detail) st.textContent = e.detail || ''; });
+  // 「雲の強調」など別の所から消えたときもボタンを合わせる
+  window.addEventListener('aw:clouds', () => setTimeout(() => {
+    const on = !!window.awCloudTop3D?.on;
+    b.classList.toggle('on', on); b.textContent = on ? '☁ 衛星雲頂3D 消す' : '☁ 衛星雲頂3D';
+  }, 0));
+}
+
+// ---- 空域（AIP ENR：FIR・ACCセクター・管制区・制限区域・訓練空域・ADIZ） ----
+const airspace = createAirspaceLayer(viewer);
+document.querySelectorAll('#asRow [data-as]').forEach(b => {
+  const label = b.textContent;
+  b.onclick = async () => {
+    b.textContent = '読み込み中…';
+    try { b.classList.toggle('on', await airspace.toggle(b.dataset.as)); }
+    catch (e) { console.warn('[airspace]', e); alert('空域データを読み込めませんでした: ' + e.message); }
+    b.textContent = label;
+  };
+});
+document.getElementById('asBand').onclick = e => {
+  airspace.setBand(airspace.band === 'low' ? 'high' : 'low');
+  e.target.textContent = airspace.band === 'low' ? 'FL335未満' : 'FL335以上';
+};
+document.getElementById('asSolid').onclick = async e => {
+  const on = !airspace.solid;
+  e.target.classList.toggle('on', on);
+  const band = document.getElementById('asBand');
+  band.disabled = on; band.style.opacity = on ? '0.4' : '';
+  band.textContent = on ? '全高度（3D）' : (airspace.band === 'low' ? 'FL335未満' : 'FL335以上');
+  if (on) {
+    // 実寸では空域の厚み（数km）が見えないので、高度を誇張して斜めから見る
+    if ((window.awGetAltScale?.() ?? 1) === 1) await window.awSetExag?.(window.AW_EXAG > 1 ? window.AW_EXAG : 25);
+    const c = viewer.camera, ctr = c.pickEllipsoid(new Cesium.Cartesian2(viewer.canvas.clientWidth / 2, viewer.canvas.clientHeight / 2));
+    if (ctr && c.pitch < Cesium.Math.toRadians(-70)) {
+      const range = Math.min(4.5e6, Math.max(6e5, Cesium.Cartesian3.distance(c.positionWC, ctr)));
+      c.flyToBoundingSphere(new Cesium.BoundingSphere(ctr, 1), { offset: new Cesium.HeadingPitchRange(c.heading, Cesium.Math.toRadians(-32), range), duration: 1.2 });
+    }
+  }
+  airspace.setSolid(on);
+};
+
+// ---- GPV（気象庁GSM・Open-Meteo 経由） ----
+const gpvPanel = createGpvPanel(viewer);
+document.getElementById('gpvBtn').onclick = () => gpvPanel.setVisible(!gpvPanel.on);
+window.addEventListener('aw:gpv', e => {
+  const b = document.getElementById('gpvBtn');
+  b.textContent = e.detail ? 'GPV非表示' : 'GPV表示';
+  b.classList.toggle('on', !!e.detail);
+});
+
+// ---- 国際悪天予想図（WAFS SIGWX・NOAA AWC） ----
+const sigwxPanel = createSigwxPanel(viewer);
+window.awSigwx = sigwxPanel;
+document.getElementById('sigwxBtn').onclick = () => sigwxPanel.setVisible(!sigwxPanel.on);
+window.addEventListener('aw:sigwx', e => document.getElementById('sigwxBtn').classList.toggle('on', !!e.detail));
+
 // ---- 高層解析の各気圧面オーバーレイ ----
 const upperStyle = {
   wet_area:       { color: '#4db6ac', alpha: 0.25 },
@@ -599,22 +740,20 @@ document.querySelectorAll('[data-close]').forEach(btn => {
   btn.onclick = () => { viewer.selectedEntity = undefined; };
 });
 
-// ---- 初期カメラ ----
-viewer.camera.flyTo({
-  destination: Cesium.Cartesian3.fromDegrees(139.219, 26.905, 870492),
-  orientation: {
-    heading: Cesium.Math.toRadians(0),
-    pitch: Cesium.Math.toRadians(-40),
-  },
-});
+// ---- 初期カメラ：日本全体を真上から ----
+const JAPAN_RECT = Cesium.Rectangle.fromDegrees(123, 24, 149, 46);
+viewer.camera.setView({ destination: JAPAN_RECT });
 
-loadFlightRoute();
-loadAirports();
-loadWeather();
-loadUpperAir();
-loadComments();
-loadFlRings();
-loadUpperLevels();
+// 事例（7/6 関西→新千歳）は「事例表示」ボタンで読み込む。初期画面はリアルタイム表示のみ
+if (CASE_MODE) {
+  loadFlightRoute();
+  loadAirports();
+  loadWeather();
+  loadUpperAir();
+  loadComments();
+  loadFlRings();
+  loadUpperLevels();
+}
 
 // ---- Step 6: カメラプリセット ----
   // [経度, 緯度, 高度m, 傾きdeg]
@@ -627,9 +766,46 @@ const camPresets = {
   hero: { lon: 137.433, lat: 27.953, height: 523982,  heading: 0, pitch: -30.2 },
 };
 
+// 視点は高度25倍のときに合わせて決めたもの。倍率が違うときは、見ている地点（画面の中心の地面）を変えずに、
+// 高く・遠くから見るように直す（100倍では約3倍の高さ）
+// 「高度強調」の視点：誇張した経路全体が入るように、経路の点から距離を決めて南から斜めに見る
+function flyHero() {
+  if (ALT_SCALE === 25 || !routePts.length) return false;
+  const sphere = Cesium.BoundingSphere.fromPoints(routePts.map(p => p.cart));
+  viewer.camera.flyToBoundingSphere(sphere, { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-28), sphere.radius * 2.3), duration: 2.5 });
+  return true;
+}
+function presetView(p) {
+  if (ALT_SCALE === 1 || ALT_SCALE === 25 || p.pitch <= -80) return p;
+  const k = (ALT_SCALE / 25) ** 0.8, t = Math.tan(Math.abs(p.pitch) * Math.PI / 180);
+  const targetLat = p.lat + p.height / t / 111000;            // 南から北を見ている（heading 0）
+  const h = p.height * k;
+  return { ...p, height: h, lat: targetLat - h / t / 111000 };
+}
+// ---- 向きのボタン：今見ている所（画面の中心の地面）を中心に、真上・東西南北・南東斜めから見る ----
+//   距離は今の距離をおおむね保つ。横から見るときは、誇張した高さ（最大で約1,000km）が入るよう少し見下ろす
+{
+  const VIEWS = { top: [0, -90], n: [180, -12], e: [270, -12], w: [90, -12], s: [0, -12], se: [315, -35] };
+  document.querySelectorAll('#camButtons button[data-view]').forEach(btn => btn.onclick = () => {
+    const [h, p] = VIEWS[btn.dataset.view];
+    const cv = viewer.canvas, cam = viewer.camera;
+    let target = cam.pickEllipsoid(new Cesium.Cartesian2(cv.clientWidth / 2, cv.clientHeight / 2));
+    if (!target) target = Cesium.Cartesian3.fromDegrees(137, 36);            // 地球の外を見ているときは日本の中心
+    const c = Cesium.Cartographic.fromCartesian(target);
+    const center = Cesium.Cartesian3.fromDegrees(Cesium.Math.toDegrees(c.longitude), Cesium.Math.toDegrees(c.latitude),
+      p > -80 && ALT_SCALE > 1 ? 300000 : 0);                                 // 横から見るときは、立体の真ん中あたりを見る
+    const dist = Cesium.Cartesian3.distance(cam.positionWC, target);
+    const range = Math.min(9e6, Math.max(p > -80 ? 1.5e6 : 4e5, dist));
+    cam.flyToBoundingSphere(new Cesium.BoundingSphere(center, 1), {
+      offset: new Cesium.HeadingPitchRange(Cesium.Math.toRadians(h), Cesium.Math.toRadians(p), range), duration: 1.5 });
+  });
+}
 document.querySelectorAll('#camButtons button[data-cam]').forEach(btn => {
   btn.onclick = () => {
-    const p = camPresets[btn.dataset.cam];
+    // リアルタイム表示中の「全体」は日本全体を真上から
+    if (btn.dataset.cam === 'all' && !CASE_MODE) { viewer.camera.flyTo({ destination: JAPAN_RECT, duration: 2.0 }); return; }
+    if (btn.dataset.cam === 'hero' && flyHero()) return;
+    const p = presetView(camPresets[btn.dataset.cam]);
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height),
       orientation: {
@@ -652,15 +828,16 @@ async function loadHimawari() {
   const times = await res.json();
   const latest = times[times.length - 1];  // 配列の最後が最新
 
-  // 2. タイルレイヤとして地球に貼る（SND/ETC = 雲頂強調画像）
-  const provider = new Cesium.UrlTemplateImageryProvider({
+  // 2. タイルレイヤとして地球に貼る（SND/ETC = 雲頂強調画像）。雲のない黒い所は透明にして、地形が見えるようにする
+  const provider = new CloudOnlyImageryProvider({
     url: `https://www.jma.go.jp/bosai/himawari/data/satimg/${latest.basetime}/fd/${latest.validtime}/SND/ETC/{z}/{x}/{y}.jpg`,
-    maximumLevel: 6,
+    maximumLevel: 5,            // 全球（fd）は z5 まで。z6 を読むと 404 で穴が開く
     credit: new Cesium.Credit('雲画像：気象庁'),
+    cloud: CLOUD_ONLY.snd,
   });
 
   himawariLayer = viewer.imageryLayers.addImageryProvider(provider);
-  himawariLayer.alpha = 0.7;   // 透明度（0〜1）
+  himawariLayer.alpha = 0.9;   // 透明度（0〜1）。雲以外は透明なので濃いめでよい
 }
 
 // ON/OFF切替
@@ -990,6 +1167,7 @@ async function reloadAll() {
   viewer.entities.removeAll();
   viewer.dataSources.removeAll();
   if (satPrimitive) { viewer.scene.primitives.remove(satPrimitive); satPrimitive = null; }
+  if (!CASE_MODE) { clearSurfaces(); return; }
 
   await Promise.all([
     loadFlightRoute(),
@@ -1004,10 +1182,19 @@ async function reloadAll() {
 }
 
 
-document.getElementById('exagBtn').onclick = async () => {
-  ALT_SCALE = ALT_SCALE === 1 ? 25 : 1;
-  const btn = document.getElementById('exagBtn');
-  btn.textContent = ALT_SCALE === 1 ? '高度25倍' : '高度1倍に戻す';
+// 高度ボタン（実寸／×25／×50／×75／×100）の表示を今の倍率に合わせる
+function syncExagButtons() {
+  document.querySelectorAll('#exagGroup button[data-exag]').forEach(b =>
+    b.classList.toggle('on', +b.dataset.exag === ALT_SCALE));
+}
+// 高度の倍率を切り替える（1 = 実寸、25/50/75/100 = 誇張）。経路アドバイスや事例表示からも呼ばれる
+async function setExag(scale) {
+  if (scale > 1) { ALT_EXAG = scale; window.AW_EXAG = scale; }   // 選んだ倍率を覚えておく
+  if (scale === ALT_SCALE) { syncExagButtons(); return; }
+  ALT_SCALE = scale;
+  syncExagButtons();
+  window.dispatchEvent(new Event('aw:altscale'));   // 雲頂3D などが高さを合わせ直す
+  advisorReady.then(a => a?.setAltScale(ALT_SCALE));
 
   // ひまわりレリーフが表示中だったら、作り直すために一旦破棄
   const satWasOn = satPrimitive && satPrimitive.show !== false;
@@ -1021,7 +1208,72 @@ document.getElementById('exagBtn').onclick = async () => {
   // 表示中だった場合は新しい倍率で再生成
   if (satWasOn) await loadHimawari3D();
 
-};
+}
+// 高度ボタンを作る：［実寸］［×25］［×50］［×75］［×100］。押した倍率にする（面の作り直しは reloadAll の中で行う）
+{
+  const g = document.getElementById('exagGroup');
+  for (const s of [1, ...EXAG_CHOICES]) {
+    const b = Object.assign(document.createElement('button'), {
+      textContent: s === 1 ? '実寸' : `×${s}`,
+      title: s === 1 ? '高度を実寸（1倍）で表示' : `高度を${s}倍に強調して表示`,
+    });
+    b.dataset.exag = s;
+    b.onclick = () => setExag(s);
+    g.appendChild(b);
+  }
+  syncExagButtons();
+}
+window.awSetExag = setExag;
+window.awGetAltScale = () => ALT_SCALE;   // 経路アドバイス（advisor.js）から高度を誇張するため
+// 標高2,000m以上の山を、高度の倍率に合わせて立体表示（誇張表示のときだけ）
+const mountains = createMountains3D(viewer, { getScale: () => ALT_SCALE });
+// 「山を強調」ボタン（右下）：高い山を高度の倍率で立体表示する／しない
+//   実寸（1倍）のときに押したら、山の強調を ON にして、最後に選んだ倍率（初期値25倍）にする（実寸では山を持ち上げないため）
+{
+  const b = document.getElementById('mountainBtn');
+  const label = () => {
+    const on = mountains.enabled && ALT_SCALE > 1;
+    b.textContent = mountains.loading ? '⛰ 山を読み込み中…' : mountains.error ? '⛰ 山を表示できません' : on ? '⛰ 山の強調ON' : '⛰ 山を強調';
+    b.title = mountains.error || '標高2,000m以上の山を、高度の倍率に合わせて立体表示';
+    b.classList.toggle('on', on);
+  };
+  b.onclick = async () => {
+    if (ALT_SCALE === 1) { await mountains.setEnabled(true); await setExag(ALT_EXAG); }
+    else await mountains.setEnabled(!mountains.enabled);
+    label();
+  };
+  window.addEventListener('aw:altscale', () => setTimeout(label, 0));
+  window.addEventListener('aw:mountains', label);
+  label();
+}
+// 右下の「天気図」ボタン：右の天気図一覧の図をクリックしたのと同じ（地図に表示＋自動解析）。もう一度押すと消す
+{
+  const SHORT = { sfc: '地上', sfc24: '地上24h', aupq78: 'AUPQ78', aupq35: 'AUPQ35', aupa25: 'AUPA25', aupa20: 'AUPA20',
+    fxfe502: 'FXFE502', fxfe5782: 'FXFE5782', fxjp854: 'FXJP854', fupa252: 'FUPA252', fupa302: 'FUPA302', fupa502: 'FUPA502',
+    axjp: 'AXJP', fxjp: 'FXJP', typhoon: '台風', fbjp: 'FBJP', vis: '可視', ir: '赤外', radar: 'レーダー', radarIntl: '海外レーダー' };
+  const box = document.getElementById('chartBtns');
+  // レーダー・海外レーダーは「地図に重ねる」で出し入れする（2つを同時に表示できる。2026-10-18）
+  const OVL = new Set(['radar', 'radarIntl']);
+  const sync = () => box.querySelectorAll('[data-chart]').forEach(b => b.classList.toggle('on', window.awCharts?.selected === b.dataset.chart || (OVL.has(b.dataset.chart) && !!window.awCharts?.overlayOn?.(b.dataset.chart))));
+  const build = () => {
+    if (!window.awCharts || box.dataset.built) return;
+    box.dataset.built = '1';
+    box.innerHTML = window.awCharts.list.map(c => `<button data-chart="${c.id}" title="${c.title}">${SHORT[c.id] || c.id}</button>`).join('');
+    box.querySelectorAll('[data-chart]').forEach(b => b.onclick = () => (OVL.has(b.dataset.chart) && window.awCharts.overlay ? window.awCharts.overlay(b.dataset.chart) : window.awCharts.toggle(b.dataset.chart)));
+    sync();
+  };
+  window.addEventListener('aw:charts-ready', build);
+  // 右の天気図一覧は、右下のボタン群の上で終わるようにする（ボタン群が隠れないように、高さに合わせて縮める）
+  const fit = () => {
+    const wx = document.getElementById('awWx'), cam = document.getElementById('camButtons');
+    if (wx && cam) wx.style.bottom = Math.max(10, window.innerHeight - cam.getBoundingClientRect().top + 8) + 'px';
+  };
+  new ResizeObserver(fit).observe(document.getElementById('camButtons'));
+  window.addEventListener('resize', fit);
+  window.addEventListener('aw:charts-ready', fit);
+  window.addEventListener('aw:chartsel', sync);
+  build();
+}
 // ---- カーテン表示切替 ----
 document.getElementById('curtainBtn').onclick = () => {
   if (!curtainEntity) return;
@@ -1032,11 +1284,27 @@ document.getElementById('curtainBtn').onclick = () => {
 };
 // ---- 予想図（FBJP）レイヤ切替 ----
 document.getElementById('fbjpLayerBtn').onclick = () => {
+  // リアルタイム表示中は、最新の国内悪天予想図（FBJP）を 3D で表示する（天気図一覧の FBJP「3Dで表示」と同じ。もう一度押すと消す）
+  if (!CASE_MODE) {
+    const fb = document.querySelector('[data-fb3d]');
+    if (!fb) { document.getElementById('fbjpLayerBtn').textContent = '悪天予想図（読み込み中）'; return; }
+    fb.click();
+    return;
+  }
   fbjpOn = !fbjpOn;
   fbjpItems.forEach(item => { item.show = fbjpOn; });
   document.getElementById('fbjpLayerBtn').textContent =
-    fbjpOn ? '悪天予想図OFF' : '悪天予想図ON';
+    fbjpOn ? '国内悪天 3D 消す' : '国内悪天 3D';
 };
+
+// 右下の「悪天予想図ON/OFF」の表示を、FBJP の 3D 表示の状態に合わせる
+document.addEventListener('click', e => {
+  if (CASE_MODE || !e.target.closest?.('[data-fb3d], #fbjpLayerBtn')) return;
+  setTimeout(() => {
+    const on = document.querySelector('[data-fb3d]')?.getAttribute('aria-pressed') === 'true';
+    document.getElementById('fbjpLayerBtn').textContent = on ? '国内悪天 3D 消す' : '国内悪天 3D';
+  }, 0);
+});
 
 // ---- ホバー表示（経路の高度＋高層解析の数値） ----
 const altTip = document.getElementById('altTip');
@@ -1139,7 +1407,7 @@ let buildSeq = 0;   // ←関数の直前に追加（let surfaceData = null; の
 async function buildSurfaces() {
   const my = ++buildSeq;          // この呼び出しの番号
   clearSurfaces();
-  if (surfaceMode === 'off') return;
+  if (surfaceMode === 'off' || !CASE_MODE) return;
 
   if (!surfaceData) {
     const res = await fetch('./data/upper_surfaces.json');
@@ -1275,8 +1543,8 @@ if (_st) _st.onclick = () => setSurfaceMode('temp');
 const _sw = document.getElementById('surfWindBtn');
 if (_sw) _sw.onclick = () => setSurfaceMode('wind');
 
-// 高度25倍ボタン・面ボタンの後で作り直す（自己完結のフック）
-['exagBtn','chart850Btn','chart700Btn','chart500Btn','chart300Btn'].forEach(id => {
+// 面ボタンの後で作り直す（自己完結のフック）。高度ボタンは reloadAll の中で作り直すので不要
+['chart850Btn','chart700Btn','chart500Btn','chart300Btn'].forEach(id => {
   const el = document.getElementById(id);
   const orig = el.onclick;
   el.onclick = async (e) => { await orig?.(e); buildSurfaces(); };
@@ -1288,3 +1556,48 @@ if (_sw) _sw.onclick = () => setSurfaceMode('wind');
 
 
 
+
+
+// ================= 事例表示の切り替え（初期画面はリアルタイム） =================
+// 事例専用のボタンは、事例表示中だけ使えるようにする
+const CASE_ONLY = ['[data-cam="dep"]', '[data-cam="turb"]', '[data-cam="arr"]', '[data-cam="hero"]',
+  '#sat3dBtn', '#chart850Btn', '#chart700Btn', '#chart500Btn', '#chart300Btn', '#profileBtn', '#curtainBtn', '#flRingBtn'];
+function applyCaseUi() {
+  CASE_ONLY.forEach(sel => document.querySelectorAll(sel).forEach(b => {
+    b.disabled = !CASE_MODE; b.style.opacity = CASE_MODE ? '' : '0.35';
+    b.title = CASE_MODE ? '' : '事例表示中に使えます';
+  }));
+  const lg = document.getElementById('legend');
+  if (lg) lg.style.display = CASE_MODE ? '' : 'none';
+  const sub = document.querySelector('#titleBar .sub');
+  if (sub) sub.textContent = (CASE_MODE ? '事例：2026-07-06 関西→新千歳 ／ ' : 'リアルタイム表示 ／ ') + '教育用プロトタイプ — 実運航の判断には使用できません';
+  const cb = document.getElementById('caseBtn');
+  if (cb) cb.textContent = CASE_MODE ? '事例を閉じる' : '事例 7/6 KIX→CTS';
+  // 事例とリアルタイムで悪天予想図の表示方法が違うので、切り替え時はいったん閉じる
+  Object.assign(document.getElementById('fbjpPanel').style, { display: 'none', left: '', top: '', transform: '' });
+  document.querySelector('#fbjpPanel .cap').textContent = '国内悪天予想図（FBJP） 出典：気象庁';
+  fbjpOn = false;
+  document.getElementById('fbjpLayerBtn').textContent = '国内悪天 3D';
+}
+{
+  const row = document.getElementById('profileBtn').parentElement;
+  const b = Object.assign(document.createElement('button'), { id: 'caseBtn' });
+  // 事例 7/6 KIX→CTS のボタンは画面に出さない（2026-10-13）。処理は残す
+  // row.appendChild(b);
+  b.onclick = async () => {
+    CASE_MODE = !CASE_MODE;
+    applyCaseUi();
+    // 事例の経路は高度を誇張した立体で見せる（すでに誇張中なら読み直すだけ）
+    if (CASE_MODE && ALT_SCALE === 1) await setExag(ALT_EXAG); else await reloadAll();
+    if (CASE_MODE) {                       // 「高度強調」の視点（斜め上から）で経路を見せる
+      const p = presetView(camPresets.hero);
+      if (!flyHero()) viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height),
+        orientation: { heading: Cesium.Math.toRadians(p.heading), pitch: Cesium.Math.toRadians(p.pitch) }, duration: 2.5 });
+    }
+    if (!CASE_MODE) {
+      document.getElementById('profilePanel').style.display = 'none';
+      viewer.camera.flyTo({ destination: JAPAN_RECT, duration: 2.0 });
+    }
+  };
+  applyCaseUi();
+}

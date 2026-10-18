@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 大きなダウンロード・作業用（2026-10-18）
+tools/intl/_downloads/
+tmp/
