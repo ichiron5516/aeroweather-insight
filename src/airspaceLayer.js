@@ -13,14 +13,20 @@ import { loadAirspaceDb } from './dbLoader.js';
 const URL = `${(import.meta.env?.BASE_URL || '/').replace(/\/?$/, '/')}data/airspace/airspace_db.json`;
 export const LAYERS = [
   ['fir', 'FIR'], ['sector', 'ACCセクター'], ['cta', '管制区'], ['restricted', '制限・警戒区域'],
-  ['jsdf', '自衛隊訓練空域'], ['civil', '民間訓練空域'], ['adiz', 'ADIZ'],
+  ['jsdf', '自衛隊・軍訓練空域'], ['civil', '民間訓練空域'], ['adiz', 'ADIZ'],
 ];
 const UNL_FT = 60000;          // 上限なし（UNL）を立体で描くときの高さ
 const ACC_COLOR = { '東京ACC': '#4fc3f7', '福岡ACC': '#81c784', '神戸ACC': '#ffb74d', '福岡ACC（洋上）': '#b0bec5', 'Incheon ACC': '#ba68c8', 'Daegu ACC': '#f48fb1' };
+// 海外の ACC：管轄の名前ごとに色を決める（隣の ACC と見分けられるように）
+const PALETTE = ['#4fc3f7', '#81c784', '#ffb74d', '#ba68c8', '#f48fb1', '#4db6ac', '#fff176', '#90caf9', '#a1887f', '#e6ee9c', '#80cbc4', '#ce93d8'];
+function unitColor(u) {
+  let h = 0; for (const ch of String(u || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
 function colorOf(o) {
   switch (o.layer) {
     case 'fir': return '#4fc3f7';
-    case 'sector': return ACC_COLOR[o.unit] || '#90a4ae';
+    case 'sector': return ACC_COLOR[o.unit] || unitColor(o.unit);
     case 'cta': return o.kind === 'tma' ? '#4dd0e1' : o.kind === 'ctr' ? '#80deea' : o.lower >= 2000 ? '#9575cd' : o.lower >= 1000 ? '#7986cb' : '#64b5f6';
     case 'restricted': return o.kind === 'warning' ? '#ffa726' : o.kind === 'prohibited' ? '#c62828' : o.kind === 'danger' ? '#ff7043' : '#ef5350';
     case 'jsdf': return o.kind === 'corridor' ? '#ce93d8' : o.kind === 'supersonic' ? '#f06292' : o.kind === 'low' ? '#ffd54f' : o.kind === 'moa' ? '#ffab91' : '#ff8a65';

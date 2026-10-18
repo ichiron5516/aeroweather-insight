@@ -5,6 +5,7 @@
 //   ・同じ名前の航空路は、端がつながっていれば1本にし、つながらなければ「名前~国コード」で別に持つ（表示は designator）
 //   ・読み込みは一度だけ（どのモジュールから呼んでも同じものを返す）
 //   ・AIP 取り込みパネルでブラウザにしまった国別データも足す（2026-10-18。同じ国コードなら置き換え）
+//   ・空域は index.json の airspaceExtra（補足データ）も足す（2026-10-18）
 const BASE = (import.meta.env?.BASE_URL || '/').replace(/\/?$/, '/');
 const get = u => fetch(BASE + u).then(r => (r.ok ? r.json() : null)).catch(() => null);
 let IDX = null;
@@ -81,6 +82,12 @@ export function loadAirspaceDb() {
     const base = (await get('data/airspace/airspace_db.json')) || { items: [] };
     const items = [...base.items];
     for (const { c, db } of await intl('airspace')) for (const o of db.items) items.push({ ...o, country: c.code });
+    // 補足データ（airspaceExtra：FIR・ACC・米国の特別使用空域・ADIZ など。tools/intl/common/airspace_extra.py）。
+    // 同じ id がすでにあれば（AIP から作った方を優先して）足さない
+    const ids = new Set(items.map(o => `${o.country || 'JP'}|${o.id}`));
+    const list = await countries();
+    const ex = await Promise.all(list.filter(c => c.airspaceExtra).map(async c => ({ c, db: await get(`data/intl/${c.airspaceExtra}`) })));
+    for (const { c, db } of ex) for (const o of db?.items || []) if (!ids.has(`${c.code}|${o.id}`)) items.push({ ...o, country: c.code });
     return { ...base, items };
   })());
 }
