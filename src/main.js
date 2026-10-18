@@ -7,6 +7,7 @@ import { createMountains3D } from './mountains3D.js';
 import { createFirLayer } from './firLayer.js';
 import { createGridLayer } from './gridLayer.js';
 import { createVarLayer } from './varLayer.js';
+import { initLayout } from './layout.js';
 import { createNavLayer } from './navLayer.js';
 import { createAirspaceLayer } from './airspaceLayer.js';
 import { createGpvPanel } from './gpvLayer.js';
@@ -32,6 +33,8 @@ window.Cesium = Cesium;   // 同上
 const advisorReady = initAdvisor(viewer);
 // AIP 取り込みパネル（「航法」の段の「📥 AIP取込」）
 initAipPanel(document.getElementById('aipBtn'));
+// iPad など小さい画面：左右のパネルを端のつまみでしまう・出す。右下のボタン群をたためる（2026-10-18）
+initLayout();
 
 // ---- 高度誇張モード ----
 const EXAG_CHOICES = [25, 50, 75, 100];   // 選べる誇張倍率（右下の「高度」ボタン）

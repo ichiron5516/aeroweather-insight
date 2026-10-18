@@ -15,6 +15,15 @@ if (-not (Select-String -Path .env.local -Pattern '^VITE_WX_PROXY=' -Quiet)) {
 Write-Host '--- ビルド（npm run build）'
 npm run build
 if ($LASTEXITCODE -ne 0) { throw 'ビルドに失敗しました' }
+# vite-plugin-cesium は Cesium を dist\aeroweather-insight\cesium に出力してしまう（base の分が二重になる）。
+# ページは /aeroweather-insight/cesium/ を読むので、dist\cesium に移す（これがないと公開サイトが真っ白になる）
+if (Test-Path "$src\dist\aeroweather-insight\cesium") {
+  Write-Host '--- Cesium のファイルを dist\cesium に移します'
+  robocopy "$src\dist\aeroweather-insight\cesium" "$src\dist\cesium" /E /NFL /NDL /NJH /NJS /NP | Out-Null
+  if ($LASTEXITCODE -ge 8) { throw "robocopy でエラー（$LASTEXITCODE）" }
+  Remove-Item -Recurse -Force "$src\dist\aeroweather-insight"
+}
+if (-not (Test-Path "$src\dist\cesium\Cesium.js")) { throw 'dist\cesium\Cesium.js がありません（Cesium のファイルが見つかりません）' }
 
 if (-not (Test-Path "$site\.git")) {
   Write-Host '--- gh-pages ブランチを取ってきます（初回だけ）'
