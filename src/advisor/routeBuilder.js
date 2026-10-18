@@ -62,7 +62,8 @@ export function createRouteBuilder(viewer, { nav, onSaved, onResize, onRoute }) 
   viewer.dataSources.dataSourceRemoved.addEventListener((_, d) => { if (d === ds) setTimeout(() => { viewer.dataSources.add(ds); preview(); }, 0); });
 
   // 「地図から選ぶ」は、路線が決まったときにオンにする（評価のときに航法データを勝手に表示しない）
-  const S = { dep: null, arr: null, picking: false, open: false, min: false, msg: null, lastApt: 0 };
+  // armed：「経路を作り始める」を押した後だけ、地図の空港のクリックを出発・到着に使う（2026-10-18。それまでは空港のクリックは METAR・TAF の表示だけ）
+  const S = { dep: null, arr: null, picking: false, open: false, min: false, msg: null, lastApt: 0, armed: false };
   box.innerHTML = `
     <h2>経路を作る <span class="sub" data-od></span><button class="x" data-min title="小さくする">－</button></h2>
     <div data-body>
@@ -70,6 +71,7 @@ export function createRouteBuilder(viewer, { nav, onSaved, onResize, onRoute }) 
       <span>出発</span><span class="ap" data-dep></span><span>→</span><span>到着</span><span class="ap" data-arr></span>
       <button data-redep title="出発空港を地図でクリックし直す">出発を選び直す</button><button data-rearr title="到着空港を地図でクリックし直す">到着を選び直す</button>
     </div>
+    <button class="go" data-arm style="margin:4px 0 2px;padding:6px 12px;font-weight:600;background:#00a152;border:1px solid #00e676;color:#fff;border-radius:5px;cursor:pointer">✈ 経路を作り始める</button>
     <div class="hint" data-hint></div>
     <div data-rtbox>
     <textarea data-rt spellcheck="false" placeholder="地図の地点・航空路をクリック、または入力（例：KOHWA Y544 DUBKA）"></textarea>
@@ -135,7 +137,7 @@ export function createRouteBuilder(viewer, { nav, onSaved, onResize, onRoute }) 
   }
   /** 空港がクリックされた（空港ピン・航法データの空港の記号）。路線を決めている間だけ受け取る → true */
   function pickAirport(icao) {
-    if (!S.open || S.min || phase() === 'route') return false;
+    if (!S.open || S.min || !S.armed || phase() === 'route') return false;
     // 同じクリックが空港ピンと航法データの両方から届くので、続けて届いた分は使わない
     if (Date.now() - S.lastApt < 600) return true;
     S.lastApt = Date.now();
@@ -161,11 +163,11 @@ export function createRouteBuilder(viewer, { nav, onSaved, onResize, onRoute }) 
   }
   /** 空港レイヤ（airportsLayer.js）からのクリック。{ kind: 'dbAirport' | 'wxStation', icao } */
   function onAirport(h) {
-    if (!S.open || S.min || phase() === 'route') return false;
+    if (!S.open || S.min || !S.armed || phase() === 'route') return false;
     return h.kind === 'dbAirport' || h.kind === 'wxStation' ? pickAirport(h.icao) : false;
   }
   /** 空港にマウスを載せたときの札に出す一言（路線を決めている間だけ） */
-  const clickHint = () => (S.open && !S.min && phase() !== 'route' ? (phase() === 'dep' ? 'クリックで出発空港に' : 'クリックで到着空港に') : null);
+  const clickHint = () => (S.open && !S.min && S.armed && phase() !== 'route' ? (phase() === 'dep' ? 'クリックで出発空港に' : 'クリックで到着空港に') : null);
 
   // ---------- 地図でのクリック（航法レイヤから受け取る） ----------
   function onPick(hit) {
@@ -191,7 +193,9 @@ export function createRouteBuilder(viewer, { nav, onSaved, onResize, onRoute }) 
     q('[data-rearr]').style.display = S.arr ? '' : 'none';
     const D = nav.getAirport(S.dep), A = nav.getAirport(S.arr);
     q('[data-od]').textContent = ph === 'route' ? `${D ? D.iata || D.icao : S.dep} → ${A ? A.iata || A.icao : S.arr}` : '';
-    q('[data-hint]').textContent = ph === 'dep' ? '① 地図の空港（青いピン・白丸）をクリックして、出発空港を選んでください。'
+    q('[data-arm]').style.display = S.armed || ph === 'route' ? 'none' : '';
+    q('[data-hint]').textContent = !S.armed && ph !== 'route' ? '「経路を作り始める」を押すと、地図の空港をクリックして出発・到着空港を選べます。今は空港をクリックすると METAR・TAF を表示します。'
+      : ph === 'dep' ? '① 地図の空港（青いピン・白丸）をクリックして、出発空港を選んでください。'
       : ph === 'arr' ? '② 次に、到着空港をクリックしてください。'
       : S.picking ? '③ 地図の地点（Waypoint・VOR）・航空路をクリックして経路を作ります。地点を選ばずに登録すると、空港間の直行経路になります。' : '';
     q('[data-odmsg]').innerHTML = S.odMsg ? `<div class="${S.odMsg.cls}">${esc(S.odMsg.text)}</div>` : '';
@@ -286,8 +290,9 @@ export function createRouteBuilder(viewer, { nav, onSaved, onResize, onRoute }) 
   ta.addEventListener('input', () => { S.msg = null; update(); });
   q('[data-min]').onclick = () => setMin(!S.min);
   q('h2').addEventListener('click', e => { if (S.min && e.target !== q('[data-min]')) setMin(false); });
-  q('[data-redep]').onclick = () => { S.dep = null; S.odMsg = null; ta.value = ''; update(); };
-  q('[data-rearr]').onclick = () => { S.arr = null; S.odMsg = null; ta.value = ''; update(); };
+  q('[data-redep]').onclick = () => { S.dep = null; S.armed = true; S.odMsg = null; ta.value = ''; update(); };
+  q('[data-rearr]').onclick = () => { S.arr = null; S.armed = true; S.odMsg = null; ta.value = ''; update(); };
+  q('[data-arm]').onclick = () => { S.armed = true; S.odMsg = null; update(); };
   q('[data-pick]').onclick = () => setPicking(!S.picking);
   q('[data-undo]').onclick = () => { const t = tokens(); t.pop(); setTokens(t); };
   q('[data-clear]').onclick = () => setTokens([]);
@@ -333,7 +338,7 @@ export function createRouteBuilder(viewer, { nav, onSaved, onResize, onRoute }) 
     /** 評価の後・出発到着の欄を変えたときに呼ぶ。出発・到着が変わったら入力を空にする */
     show(dep, arr) {
       if (S.dep !== dep || S.arr !== arr) { ta.value = ''; S.msg = null; }
-      S.dep = dep; S.arr = arr; S.open = true; S.odMsg = null;
+      S.dep = dep; S.arr = arr; S.open = true; S.odMsg = null; S.armed = true;
       box.style.display = 'block';
       update();
     },

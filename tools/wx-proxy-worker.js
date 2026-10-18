@@ -7,7 +7,7 @@
 // それに AIP 取り込みパネルの eAIP（/aip?url=…。2026-10-18 追加。URL に eAIP・AIP を含む http(s) のページ・zip だけ）。
 // 呼び出し元は公開サイトとローカル開発に限定する。
 const ALLOW_ORIGINS = ['https://ichiron5516.github.io', 'http://localhost:5173'];
-const ALLOW_PATHS = /^\/(metar|taf|isigmet)$/;
+const ALLOW_PATHS = /^\/(metar|taf|isigmet|stationinfo)$/;   // stationinfo：白丸の空港の一覧（2026-10-18 追加）
 const RISH = /^\/rish\/(\d{4}\/\d\d\/\d\d)\/(Z__C_RJTD_\d{14}_GSM_GPV_Rgl_FD\d{4}_grib2\.bin)?$/;   // /rish/YYYY/MM/DD/[GSM のファイル]（2026-10-18）
 const SIGWX = /^\/sigwx\/(\d{8}\/\d{8}_\d{2}_F\d{2}_sigwx_hi_[A-Z]+\.geojson)$/;   // /sigwx/YYYYMMDD/YYYYMMDD_HH_Fhh_sigwx_hi_CB.geojson
 

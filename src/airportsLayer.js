@@ -70,6 +70,11 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
     const KEY = 'aw.wxStations.v5', DAYS = 30;          // v5：範囲を地球のふち（衛星の真下から 81 度）まで広げた（前の一覧は使わない）
     try { for (const v of [1, 2, 3, 4]) localStorage.removeItem(`aw.wxStations.v${v}`); } catch { /* なし */ }
     try { const c = JSON.parse(localStorage.getItem(KEY) || 'null'); if (c && Date.now() - c.t < DAYS * 864e5 && c.list?.length) return c.list; } catch { /* なし */ }
+    // アプリに入れてある一覧（public/data/wx_stations.json、2026-10-18）を使う。iPad や公開サイトでも、AWC に何百回も問い合わせずにすぐ出せる
+    try {
+      const r = await fetch(`${import.meta.env.BASE_URL || '/'}data/wx_stations.json`);
+      if (r.ok) { const j = await r.json(); if (j.list?.length) return j.list; }
+    } catch { /* なければ下で AWC に問い合わせる */ }
     const res = new Map();
     // 10度ごとに区切って地点一覧を取る（1回に返る数に上限 400 があるため、多い所は4つに分ける）
     let failed = 0, gate = 0;
