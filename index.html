@@ -126,8 +126,45 @@
         white-space: nowrap;
       }
       #camButtons button:hover { background: #1e3a5f; }
+      /* 使わなくなったボタン（事例専用・衛星画像は右の一覧へ移した）。処理が参照するので消さずに隠す */
+      #camButtons [data-cam="dep"], #camButtons [data-cam="turb"], #camButtons [data-cam="arr"], #camButtons [data-cam="hero"],
+      #sat3dBtn, #chart850Btn, #chart700Btn, #chart500Btn, #chart300Btn, #profileBtn, #curtainBtn, #flRingBtn, #himawariBtn { display: none !important; }
+      #mountainBtn.on { background: #3b2f1e; border-color: #ffcc80; }
+      /* 高度の倍率（実寸／×25／×50／×75／×100）：つながったボタンで、今の倍率を明るくする */
+      #exagGroup { display: inline-flex; align-items: center; }
+      #exagGroup .exagLabel { color: #8fd0ff; font-size: 11px; margin-right: 4px; }
+      #camButtons #exagGroup button { border-radius: 0; margin: 0; padding: 7px 8px; }
+      #camButtons #exagGroup button + button { border-left: none; }
+      #camButtons #exagGroup button:first-of-type { border-radius: 6px 0 0 6px; }
+      #camButtons #exagGroup button:last-of-type { border-radius: 0 6px 6px 0; }
+      #camButtons #exagGroup button.on { background: #1e5a8c; border-color: #ffffff; font-weight: bold; }
+      /* 天気図ボタン：数が多いので小さめにして折り返す（右寄せ・最大幅を決める） */
+      #chartBtns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px; max-width: 640px; }
+      #camButtons #chartBtns button { padding: 3px 6px; font-size: 11px; }
+      #camButtons #chartBtns button.on { background: #1e5a8c; border-color: #ffffff; }
+      /* 航法データ（航空路・Waypoint・VOR）ボタンと、表示中だけ出す凡例 */
+      #camButtons #varBtn.on { background: #3d1450; border-color: #e040fb; }
+      #camButtons #gridBtn.on { background: #1f3b57; border-color: #cfe8ff; }
+      #camButtons #navBtn.on { background: #134e4a; border-color: #64ffda; }
+      #camButtons #aipBtn.on { background: #5d3a00; border-color: #ffb74d; }
+      /* 空域（AIP ENR）のボタン：表示中は明るく */
+      #camButtons #ct3dBtn.on { background: #2a3f5c; border-color: #ffffff; }
+      #ct3dSt { font-family: "Meiryo", sans-serif; font-size: 11px; color: #e3f2fd; text-shadow: 0 0 4px #000; max-width: 640px; text-align: right; }
+      #ct3dSt:empty { display: none; }
+      #camButtons #asRow { flex-wrap: wrap; justify-content: flex-end; max-width: 640px; }
+      #camButtons #asRow button { padding: 4px 7px; font-size: 11.5px; }
+      #camButtons #asRow button.on { background: #5c1f2b; border-color: #ef9a9a; }
+      #camButtons #asBand, #camButtons #asSolid { border-style: dashed; }
+      #navLegend {
+        display: none; gap: 8px; align-items: center;
+        background: rgba(20, 30, 45, 0.85); color: #e0e0e0;
+        font-family: "Meiryo", sans-serif; font-size: 10.5px;
+        border-radius: 6px; padding: 4px 8px;
+      }
+      #navLegend.on { display: inline-flex; }
+      #navLegend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin: 0 3px 0 2px; }
     </style>
-    <script type="module" crossorigin src="/aeroweather-insight/assets/index-CcPWvr2W.js"></script>
+    <script type="module" crossorigin src="/aeroweather-insight/assets/index-D-CZ1CXX.js"></script>
     <link rel="stylesheet" crossorigin href="/aeroweather-insight/assets/index-B9DDZdqH.css">
   </head>
   <body>
@@ -207,24 +244,73 @@
         <button data-cam="hero">高度強調</button>
       </div>
       <div class="btnRow">
+        <span class="rowLabel">向き</span>
+        <button data-view="top" title="今見ている所を真上から">真上</button>
+        <button data-view="n" title="北から南を見る">北から</button>
+        <button data-view="e" title="東から西を見る">東から</button>
+        <button data-view="w" title="西から東を見る">西から</button>
+        <button data-view="s" title="南から北を見る">南から</button>
+        <button data-view="se" title="南東から北西を斜めに見下ろす">南東斜め</button>
+      </div>
+      <div class="btnRow">
         <span class="rowLabel">レイヤ</span>
         <button id="himawariBtn">☁ 衛星画像</button>
         <button id="sat3dBtn">☁ 衛星3D雲</button>
-        <button id="fbjpLayerBtn">悪天予想図ON</button>
+        <button id="fbjpLayerBtn" title="国内悪天予想図（FBJP）のジェット気流・CAT・揺れのある雲を、読み取った高さで立体表示（天気図一覧の FBJP「3Dで表示」と同じ）">国内悪天 3D</button>
         <button id="chart850Btn">850面ON</button>
         <button id="chart700Btn">700面ON</button>
         <button id="chart500Btn">500面ON</button>
         <button id="chart300Btn">300面ON</button>
       </div>
+      <div id="upper3dSt"></div>
+      <div class="btnRow">
+        <span class="rowLabel">高層3D</span>
+        <div id="upper3dBtns"></div>
+      </div>
+      <div class="btnRow">
+        <span class="rowLabel">天気図</span>
+        <div id="chartBtns"></div>
+      </div>
       <div class="btnRow">
         <span class="rowLabel">表示</span>
         <button id="profileBtn">断面図</button>
-        <button id="exagBtn">高度25倍</button>
+        <button id="mountainBtn">⛰ 山の強調ON</button>
         <button id="curtainBtn">カーテンON</button>
         <button id="flRingBtn">高度目盛ON</button>
+        <button id="firBtn" title="アジアのFIR（飛行情報区）の境界線">FIR境界ON</button>
+        <button id="varBtn" title="磁気偏差（Variation、偏角）の等偏角線。WMM2025 で今日の値を計算。0°（無偏角線）は実線。画面の下に画面中央の偏差">Variation ON</button>
+        <button id="gridBtn" title="緯度・経度の線と目盛り。近づくほど細かくなる（10°→5°→2°→1°→30′）">緯度経度線ON</button>
+        <button id="gpvBtn" title="数値予報（気象庁GSM）の風・気温・湿り・雲量・降水量">GPV表示</button>
+        <button id="sigwxBtn" title="国際悪天予想図（WAFS SIGWX：積乱雲・乱気流・着氷・ジェット気流・圏界面。6〜48時間先、全球）">国際悪天（SIGWX）</button>
+        <button id="ct3dBtn" title="ひまわり赤外の雲頂温度から雲頂の高さを求めて、アジア全域の雲を立体で表示。日本付近は強いエコー（5mm/h以上）があり雲頂が高い（約FL250以上）所、海外は雲頂が高く周りより盛り上がった所を積乱雲にする（高度は自動で誇張）">☁ 衛星雲頂3D</button>
         <!-- <button id="surfHeightBtn">面:高度</button>
         <button id="surfTempBtn">面:気温</button>
         <button id="surfWindBtn">面:風速</button> -->
+      </div>
+      <div class="btnRow" id="asRow">
+        <span class="rowLabel">空域</span>
+        <button data-as="fir" title="福岡FIR（AIP Japan ENR 2.1）・仁川FIR（AIP Korea ENR 2.1）">FIR</button>
+        <button data-as="sector" title="東京・福岡・神戸ACC と 仁川・大邱ACC のセクター（ENR 2.1）。重なるので高さの帯を右のボタンで切り替え">ACCセクター</button>
+        <button id="asBand" title="ACCセクターの高さの帯を切り替え">FL335未満</button>
+        <button data-as="cta" title="航空交通管制区（ENR 2.1 2.）：空港から半径20・40NM と 2000ft 以上の区域。韓国は TMA・管制圏">管制区</button>
+        <button data-as="restricted" title="飛行制限区域・空域制限（R- / W- / 演習場）（ENR 5.1）。韓国の P・R・D・警戒区域を含む">制限・警戒</button>
+        <button data-as="jsdf" title="自衛隊の低高度・高高度訓練／試験空域、超音速飛行空域、専用回廊（ENR 5.2）。韓国の軍訓練空域（MOA・ACMI）を含む">軍・自衛隊訓練</button>
+        <button data-as="civil" title="民間訓練試験空域（ENR 5.3）。韓国の CATA を含む">民間訓練</button>
+        <button data-as="adiz" title="防空識別圏（JADIZ・KADIZ）">ADIZ</button>
+        <button id="asSolid" title="AIP の下限〜上限の高さで立体表示（高度の倍率に合わせる。実寸のときは×25 にする）">3D</button>
+      </div>
+      <div id="ct3dSt"></div>
+      <div class="btnRow">
+        <span class="rowLabel">航法</span>
+        <span id="navLegend">
+          <span style="color:#64ffda">⬡ VOR/DME ◇ TACAN</span>
+          <span>▲ 義務通報点 △ 任意</span>
+          <span style="color:#9e9e9e">△ SID/STAR</span>
+          <span><i style="background:#80cbc4"></i>RNAV <i style="background:#ce93d8"></i>従来型</span>
+        </span>
+        <button id="navBtn" title="航空路・Waypoint・VOR/DME・TACAN をすべて表示（AIP Japan・各国の AIP と、AIP 取り込みで足した国）。記号や航空路をクリックすると詳細">✈ 航法データ表示</button>
+        <button id="aipBtn" title="AIP（各国の eAIP の HTML、または DB ファイル）を読み込んで、航法データと空港データベースを更新する">📥 AIP取込</button>
+        <span id="exagGroup"><span class="exagLabel">高度</span></span>
       </div>
     </div>
 
