@@ -35,7 +35,8 @@
       "aip": "AIP Thailand eAIP 2026-10-29 AIRAC（https://aip.caat.or.th/）",
       "nav": "th/nav_db.json",
       "airports": "th/airport_db.json",
-      "airspace": "th/airspace_db.json"
+      "airspace": "th/airspace_db.json",
+      "airspaceExtra": "th/airspace_extra.json"
     },
     {
       "code": "SG",
@@ -53,7 +54,8 @@
       "aip": "AIP Viet Nam eAIP 2026-10-29 AIRAC（https://aim.vatm.vn/）",
       "nav": "vn/nav_db.json",
       "airports": "vn/airport_db.json",
-      "airspace": "vn/airspace_db.json"
+      "airspace": "vn/airspace_db.json",
+      "airspaceExtra": "vn/airspace_extra.json"
     },
     {
       "code": "PH",
@@ -62,7 +64,8 @@
       "aip": "AIP Philippines ENR 2.1 / 3.1 / 3.2 / 4.1（PDF）",
       "nav": "ph/nav_db.json",
       "airports": "ph/airport_db.json",
-      "airspace": "ph/airspace_db.json"
+      "airspace": "ph/airspace_db.json",
+      "airspaceExtra": "ph/airspace_extra.json"
     },
     {
       "code": "MY",
@@ -71,7 +74,8 @@
       "aip": "AIP Malaysia eAIP 2026-10-29 AIRAC（https://aip.caam.gov.my/）",
       "nav": "my/nav_db.json",
       "airports": "my/airport_db.json",
-      "airspace": "my/airspace_db.json"
+      "airspace": "my/airspace_db.json",
+      "airspaceExtra": "my/airspace_extra.json"
     },
     {
       "code": "BN",
@@ -89,7 +93,8 @@
       "aip": "AIP China eAIP AIRAC 2026-10（https://www.eaipchina.cn/）",
       "nav": "cn/nav_db.json",
       "airports": "cn/airport_db.json",
-      "airspace": "cn/airspace_db.json"
+      "airspace": "cn/airspace_db.json",
+      "airspaceExtra": "cn/airspace_extra.json"
     },
     {
       "code": "KH",
@@ -98,7 +103,8 @@
       "aip": "AIP Cambodia eAIP 2026-09-03 AIRAC（https://aim.cats.com.kh/）",
       "nav": "kh/nav_db.json",
       "airports": "kh/airport_db.json",
-      "airspace": "kh/airspace_db.json"
+      "airspace": "kh/airspace_db.json",
+      "airspaceExtra": "kh/airspace_extra.json"
     },
     {
       "code": "LA",
@@ -107,7 +113,8 @@
       "aip": "AIP Lao PDR ENR 3.2（AIRAC AIP AMDT 13/15、31 MAR 2016）・ENR 2.1（紙面の写真から読み取り）",
       "nav": "la/nav_db.json",
       "airports": "la/airport_db.json",
-      "airspace": "la/airspace_db.json"
+      "airspace": "la/airspace_db.json",
+      "airspaceExtra": "la/airspace_extra.json"
     },
     {
       "code": "ID",
@@ -116,7 +123,8 @@
       "aip": "AIP Indonesia ENR 3.1（AMDT 180, 01 OCT 26）・ENR 3.2（AMDT 178, 06 AUG 26）・ENR 2.1（AMDT 180）",
       "nav": "id/nav_db.json",
       "airports": "id/airport_db.json",
-      "airspace": "id/airspace_db.json"
+      "airspace": "id/airspace_db.json",
+      "airspaceExtra": "id/airspace_extra.json"
     },
     {
       "code": "MM",
@@ -124,7 +132,8 @@
       "fir": "VYYF",
       "aip": "AIP Myanmar eAIP 2018-02-15（https://www.ais.gov.mm/eAIP/2018-02-15/）。古い版のため最新の AIP と違う可能性あり",
       "nav": "mm/nav_db.json",
-      "note": "空港は METAR・TAF の白丸のまま（2026-10-18 の指示）。AD 2 から作った空港データは mm/airport_db.json に残してある（index には載せない）"
+      "note": "空港は METAR・TAF の白丸のまま（2026-10-18 の指示）。AD 2 から作った空港データは mm/airport_db.json に残してある（index には載せない）",
+      "airspaceExtra": "mm/airspace_extra.json"
     },
     {
       "code": "IN",
@@ -132,49 +141,148 @@
       "fir": "VABF・VECF・VIDF・VOMF",
       "aip": "AIP India eAIP-v2（https://aim-india.aai.aero/eaip-v2/、AMDT 01/2018。PDF を tools/intl/in/in_build.py で解析）。古い版のため最新の AIP と違う可能性あり",
       "nav": "in/nav_db.json",
-      "note": "空港は METAR・TAF の白丸のまま（2026-10-18 の指示）。AD 2 から作った空港データは in/airport_db.json に残してある（index には載せない）"
+      "note": "空港は METAR・TAF の白丸のまま（2026-10-18 の指示）。AD 2 から作った空港データは in/airport_db.json に残してある（index には載せない）",
+      "airspaceExtra": "in/airspace_extra.json"
     },
     {
       "code": "MN",
       "name": "モンゴル",
       "fir": "ZMUB",
       "aip": "AIP Mongolia eAIP 2026-10-29 AIRAC（https://ais.mn/files/aip/eAIP/2026-10-29-AIRAC/）。空港は METAR・TAF の白丸のまま",
-      "nav": "mn/nav_db.json"
+      "nav": "mn/nav_db.json",
+      "airspaceExtra": "mn/airspace_extra.json"
     },
     {
       "code": "BD",
       "name": "バングラデシュ",
       "fir": "VGFR",
       "aip": "AIP Bangladesh ENR 3.1〜3.3・4.1・4.3（PDF、AIP AMDT 03/26。tools/intl/bd/bd_build.py で解析）。空港は METAR・TAF の白丸のまま",
-      "nav": "bd/nav_db.json"
+      "nav": "bd/nav_db.json",
+      "airspaceExtra": "bd/airspace_extra.json"
     },
     {
       "code": "NP",
       "name": "ネパール",
       "fir": "VNSM",
       "aip": "AIP Nepal ENR 3.3 RNAV 航空路（PDF、8th EDITION・2022〜2023 年のページ。tools/intl/np/np_build.py で解析）。空港は METAR・TAF の白丸のまま",
-      "nav": "np/nav_db.json"
+      "nav": "np/nav_db.json",
+      "airspaceExtra": "np/airspace_extra.json"
     },
     {
       "code": "US",
       "name": "アメリカ（アラスカ・ハワイ・グアム・太平洋）",
       "fir": "PAZA・KZAK・PHZH（ハワイ）・PGZU（グアム）",
       "aip": "FAA NASR 28 Day Subscription 2026-10-01（航空路 AWY は 2026-09-03 版）。米国 AIP の ENR 3 は航空路を Part 95・NASR に任せているため。tools/intl/us/us_build.py で作成。グアムの UAM TACAN を含む。空港は METAR・TAF の白丸のまま",
-      "nav": "us/nav_db.json"
+      "nav": "us/nav_db.json",
+      "airspaceExtra": "us/airspace_extra.json"
+    },
+    {
+      "code": "AF",
+      "name": "アフガニスタン",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "af/airspace_extra.json"
     },
     {
       "code": "AU",
       "name": "オーストラリア",
-      "fir": "YMMM・YBBB",
-      "aip": "AIP Australia DAH（Designated Airspace Handbook）26 NOV 2026 SECTION 21・23（ENR 3 は航空路を DAH に任せているため。https://www.airservicesaustralia.com/aip/）。tools/intl/au/au_build.py。空港は METAR・TAF の白丸のまま",
-      "nav": "au/nav_db.json"
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "au/airspace_extra.json"
+    },
+    {
+      "code": "FJ",
+      "name": "フィジー",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "fj/airspace_extra.json"
+    },
+    {
+      "code": "KG",
+      "name": "キルギス",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "kg/airspace_extra.json"
+    },
+    {
+      "code": "KP",
+      "name": "北朝鮮",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "kp/airspace_extra.json"
+    },
+    {
+      "code": "KZ",
+      "name": "カザフスタン",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "kz/airspace_extra.json"
+    },
+    {
+      "code": "LK",
+      "name": "スリランカ",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "lk/airspace_extra.json"
+    },
+    {
+      "code": "MV",
+      "name": "モルディブ",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "mv/airspace_extra.json"
+    },
+    {
+      "code": "NR",
+      "name": "ナウル",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "nr/airspace_extra.json"
+    },
+    {
+      "code": "NZ",
+      "name": "ニュージーランド",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "nz/airspace_extra.json"
+    },
+    {
+      "code": "PF",
+      "name": "フランス領ポリネシア",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "pf/airspace_extra.json"
     },
     {
       "code": "PG",
       "name": "パプアニューギニア",
-      "fir": "AYPM",
-      "aip": "AIP Papua New Guinea（PNG AIP 01 OCT 2026、PDF）ENR 3.1〜3.3・4.1・4.3。tools/intl/pg/pg_build.py。空港は METAR・TAF の白丸のまま",
-      "nav": "pg/nav_db.json"
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "pg/airspace_extra.json"
+    },
+    {
+      "code": "PK",
+      "name": "パキスタン",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "pk/airspace_extra.json"
+    },
+    {
+      "code": "RU",
+      "name": "ロシア",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "ru/airspace_extra.json"
+    },
+    {
+      "code": "SB",
+      "name": "ソロモン諸島",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "sb/airspace_extra.json"
+    },
+    {
+      "code": "TJ",
+      "name": "タジキスタン",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "tj/airspace_extra.json"
+    },
+    {
+      "code": "TM",
+      "name": "トルクメニスタン",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "tm/airspace_extra.json"
+    },
+    {
+      "code": "UZ",
+      "name": "ウズベキスタン",
+      "note": "空域の補足データだけ（航空路・空港は無い）",
+      "airspaceExtra": "uz/airspace_extra.json"
     }
   ]
 }
