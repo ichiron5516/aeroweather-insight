@@ -6,7 +6,7 @@
 //       表示   … 気象（衛星・レーダー、悪天予想図、数値予報、高層3D、海洋、解析3D）、地図（山・FIR・Variation・緯度経度線）、
 //                航空（空域・航法・青丸空港・白丸空港）の表示のオン・オフ
 //       設定   … 視点・向き・高度の倍率・AIP 取込・凡例（凡例は事例表示のときだけ）
-//   ・地図の上に残すのは、右上の「全体・真上・斜め」、左上の推奨経路の 1 行（評価の後）、右下の「凡例」（事例表示のときだけ）
+//   ・地図の上に残すのは、右上の「全体・真上・斜め」と、右下の「凡例」（事例表示のときだけ）。評価した経路の札は出さない（2026-10-19）
 //   ・ボタンは index.html・各ファイルの要素をそのまま移すので、押したときの処理は変わらない
 //   ・ほかのファイルは window.awLayout.insets() で、地図が見えている範囲（左右に隠れている幅）を知る
 const KEY = 'aw.layout.v3';
@@ -119,13 +119,6 @@ const CSS = `
 #awLegBtn[aria-pressed="true"]{background:#1e3a5f;border-color:#fff}
 #legend{left:auto !important;right:8px !important;bottom:82px !important;z-index:31 !important;font-size:11.5px !important;line-height:1.75 !important;max-width:calc(100vw - var(--awL) - 30px)}
 body:not(.awLegOn) #legend{display:none !important}
-#awRec{position:absolute;left:calc(var(--awL) + 8px);top:56px;z-index:30;max-width:min(560px,calc(100vw - var(--awL) - 120px));display:none;
-  background:rgba(20,30,45,.94);color:#fff;border:1px solid #00e676;border-radius:8px;padding:6px 10px;font:12.5px/1.4 "Meiryo",sans-serif;cursor:pointer;transition:left .2s ease}
-#awRec.on{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-#awRec b{font:700 13px ui-monospace,Menlo,monospace}
-#awRec .b{border-radius:9px;padding:0 8px;font-size:11px;font-weight:600}
-#awRec .good{background:#2e7d32}#awRec .caution{background:#b58900}#awRec .avoid{background:#c62828}
-#awRec .s{color:#b2dfdb;font-size:11.5px}
 #titleBar{left:calc(var(--awL) + 8px) !important;top:8px !important;padding:5px 10px !important;transition:left .2s ease}
 #titleBar h1{font-size:14px !important}
 #titleBar .sub{font-size:10px !important;margin-top:1px !important}
@@ -210,7 +203,6 @@ export function initLayout() {
     if (adv && adv.parentElement !== dRoute) {
       dRoute.appendChild(adv);
       const h = adv.querySelector('h2'); if (h && !h.querySelector('.awStep')) h.insertAdjacentHTML('afterbegin', '<span class="awStep">2</span>');
-      watchRec(adv);
     }
   }
   // 天気図の一覧：「種類」で絞り込む（すべて／地上／高層…）
@@ -255,9 +247,7 @@ export function initLayout() {
   const legSet = dSet.querySelector('[data-leg]');
   const toggleLeg = () => { S.leg = !S.leg; apply(); };
   legBtn.onclick = toggleLeg; legSet.onclick = toggleLeg;
-  const rec = Object.assign(document.createElement('div'), { id: 'awRec', title: 'クリックで経路の引き出しを開く' });
-  rec.onclick = () => { S.open = 'route'; apply(); };
-  document.body.append(quick, legBtn, rec);
+  document.body.append(quick, legBtn);
   // 凡例（index.html の #legend）は事例表示のときだけ使う（main.js がリアルタイム表示では隠す）。使えるときだけボタンを出す
   const lgEl = $('legend');
   const syncLegAvail = () => {
@@ -267,21 +257,6 @@ export function initLayout() {
   };
   if (lgEl) new MutationObserver(syncLegAvail).observe(lgEl, { attributes: true, attributeFilter: ['style'] });
   syncLegAvail();
-
-  // 推奨経路の 1 行：経路アドバイスの候補一覧（選んでいる経路）から作る
-  function watchRec(adv) {
-    const upd = () => {
-      const li = adv.querySelector('#awList li[aria-current="true"]');
-      if (!li) { rec.classList.remove('on'); return; }
-      const name = (li.querySelector('.top b')?.textContent.trim() || '').replace(/^\d+\.\s*/, '');
-      const badge = li.querySelector('.top .b'), sub = li.querySelector('.sub span')?.textContent.trim() || '';
-      const dep = adv.querySelector('#awDep')?.value || '', arr = adv.querySelector('#awArr')?.value || '';
-      rec.innerHTML = `<span>${dep} → ${arr}</span><b>${name}</b>${badge ? `<span class="${badge.className}">${badge.textContent}</span>` : ''}<span class="s">${sub}</span>`;
-      rec.classList.add('on');
-    };
-    new MutationObserver(upd).observe(adv, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-current'] });
-    upd();
-  }
 
   // ---- 出し入れ ----
   function apply() {
