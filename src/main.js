@@ -27,6 +27,11 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
   baseLayerPicker: false,   // 右上の地図（レイヤ）切替ボタンは使わない
 });
 window.viewer = viewer;   // 開発用：Consoleからカメラ位置を取得するため
+// 下地の衛星写真を少し明るくする（2026-10-19）。1 が元の明るさ。明るさ・ガンマを上げると海や山の影が明るくなる
+{
+  const base = viewer.imageryLayers.get(0);
+  if (base) { base.brightness = 1.6; base.gamma = 1.3; }
+}
 window.Cesium = Cesium;   // 同上
 
 // ---- 揺れ回避 経路アドバイス（リアルタイム気象で登録経路を採点） ----

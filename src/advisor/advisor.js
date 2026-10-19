@@ -149,22 +149,37 @@ function sigmetHtml(g) {
 const RISK_COL = { null: null, LGT: '#ffee58', MOD: '#ffa726', SEV: '#ef5350' };
 const LEVEL_JA = { good: '揺れ小', caution: '揺れ注意', avoid: '揺れ大' };
 
-// 開いたときの地図の範囲：女満別（RJCM）・釧路（RJCK）〜香港（VHHH）。左のアイコンの列と引き出し（layout.js）の分だけ西に広げる
-const START = { w: 110.8, e: 147.0, s: 19.8, n: 46.6 };   // 札・ボタンに隠れないよう少し余白をとる
-function startRect(viewer) {
+// 開いたときの地図：日本の地上天気図（気象庁。chartOverlay.js の PROJ.sfc）の枠が、左の引き出しの右側にちょうど収まる大きさ（2026-10-19）
+//   天気図の枠の周り（四隅と各辺の途中）の緯度経度。ポーラーステレオ図法の枠を、東経140度の真上から見下ろして合わせる
+const SFC_FRAME = [[90.18, 44.88], [106.16, 54.23], [131.1, 59.65], [159.66, 58.23], [181.06, 50.87], [170.46, 40.54], [163.93, 30.16],
+  [159.62, 20.38], [156.58, 11.43], [146.96, 13.4], [136.94, 13.73], [127.09, 12.38], [117.96, 9.55], [114.15, 17.9], [108.89, 26.87], [101.36, 36.11]];
+function startView(viewer) {
+  const cam = viewer.camera, sc = viewer.scene;
   const W = viewer.canvas.clientWidth || window.innerWidth, H = viewer.canvas.clientHeight || window.innerHeight;
-  const L = Math.min(W * 0.6, window.awLayout?.insets?.().left || 0), visW = W - L;
-  const k = Math.cos(((START.s + START.n) / 2) * Math.PI / 180);            // 経度1度の長さ（緯度1度に対する割合）
-  const sc = Math.max((START.e - START.w) * k / visW, (START.n - START.s) / (H - 40));   // 1px あたりの度（下の時刻の帯の分を引く）
-  const cLon = (START.w + START.e) / 2 - (L / 2) * sc / k, cLat = (START.s + START.n) / 2 - 20 * sc;
-  const hw = W / 2 * sc / k, hh = H / 2 * sc;
-  return Cesium.Rectangle.fromDegrees(cLon - hw, cLat - hh, cLon + hw, cLat + hh);
+  const L = Math.min(W * 0.6, window.awLayout?.insets?.().left || 0);
+  const box = { x0: L + 6, x1: W - 6, y0: 6, y1: H - 34 };          // 下は時刻の帯の分をあける
+  const pts = SFC_FRAME.map(([lo, la]) => Cesium.Cartesian3.fromDegrees(lo, la));
+  cam.setView({ destination: Cesium.Cartesian3.fromDegrees(140, 36, 9.0e6), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
+  for (let it = 0; it < 12; it++) {
+    const ws = pts.map(p => Cesium.SceneTransforms.worldToWindowCoordinates(sc, p));
+    const h = cam.positionCartographic.height;
+    if (ws.some(w => !w)) { cam.moveBackward(h * 0.3); continue; }
+    const xs = ws.map(w => w.x), ys = ws.map(w => w.y);
+    const bx0 = Math.min(...xs), bx1 = Math.max(...xs), by0 = Math.min(...ys), by1 = Math.max(...ys);
+    const f = Math.max((bx1 - bx0) / (box.x1 - box.x0), (by1 - by0) / (box.y1 - box.y0));
+    const mpp = 2 * h * Math.tan(cam.frustum.fovy / 2) / H;                   // 1px あたりの距離（地面の近くでおおよそ）
+    const dx = (bx0 + bx1) / 2 - (box.x0 + box.x1) / 2, dy = (by0 + by1) / 2 - (box.y0 + box.y1) / 2;
+    if (Math.abs(dx) > 1) cam.moveRight(dx * mpp);
+    if (Math.abs(dy) > 1) cam.moveDown(dy * mpp);
+    if (Math.abs(f - 1) > 0.005) cam.moveBackward(h * (f - 1));
+    if (Math.abs(f - 1) < 0.005 && Math.abs(dx) < 2 && Math.abs(dy) < 2) break;
+  }
 }
 
 export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_URL}data/nav/` } = {}) {
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
-  // main.js の初期カメラより後に適用する。開いたときは 北海道（女満別・釧路）〜香港 を、左の引き出しに隠れない範囲に収める（2026-10-19）
-  setTimeout(() => viewer.camera.setView({ destination: startRect(viewer) }), 0);
+  // main.js の初期カメラより後に適用する。開いたときは日本の地上天気図の枠が、左の引き出しに隠れない範囲にちょうど収まるようにする（2026-10-19）
+  setTimeout(() => { try { startView(viewer); } catch (e) { console.warn('[advisor] startView', e); viewer.camera.setView({ destination: JAPAN_RECT }); } }, 0);
 
   // 空港データベースの空港を表示。事例表示中は、事例側の空港（関西・新千歳など）のピンを隠す
   const airportsReady = initAirportsLayer(viewer);

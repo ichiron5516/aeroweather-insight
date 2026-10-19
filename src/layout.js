@@ -1,6 +1,6 @@
 // 画面の割り付け（iPad 11 インチの横向き 1,194×834 に合わせる。2026-10-19）
 //   ・画面の左端にアイコンの列（上から「天気図」「経路」「表示」「設定」）。押したものだけ、その右に引き出し（1 列）を出す。
-//     もう一度押すとしまう。同時に出す引き出しは 1 つだけ。どれを出していたかはブラウザに覚えておく
+//     もう一度押すとしまう。同時に出す引き出しは 1 つだけ。開いたときは「天気図」の引き出しを出す
 //       天気図 … 天気図・画像の一覧（#awWx。chartsPanel.js が作る）。見本は小さめ・1 列。上の「種類」で絞り込める
 //       経路   … 経路を作る（#awRB）と 揺れ回避 経路アドバイス（#awAdv）を 1 つの引き出しに縦に並べる
 //       表示   … 気象（衛星・レーダー、悪天予想図、数値予報、高層3D、海洋、解析3D）、地図（山・FIR・Variation・緯度経度線）、
@@ -151,7 +151,8 @@ function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {
 export function initLayout() {
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   const $ = id => document.getElementById(id);
-  const S = load() || { open: window.innerWidth < 1300 ? null : 'route', leg: false };   // open：出している引き出し（null＝どれも出さない）
+  const S = load() || { leg: false };
+  S.open = 'wx';                       // open：出している引き出し（null＝どれも出さない）。開いたときはいつも「天気図」（2026-10-19）
 
   // ---- アイコンの列 ----
   const rail = Object.assign(document.createElement('div'), { id: 'awRail' });
