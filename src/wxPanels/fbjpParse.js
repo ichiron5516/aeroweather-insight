@@ -147,7 +147,7 @@ function fractions(nums) {
 
 // ---------------- 面（閉じた輪郭の内側） ----------------
 /** 線の画素（mask）で囲まれた内側の領域。gap 画素までのすき間（破線）は閉じる */
-function enclosed(W, H, mask, box, gap, minArea, { frame = false, extra = null } = {}) {
+function enclosed(W, H, mask, box, gap, minArea, { frame = false, extra = null, edges = null } = {}) {
   const bw = box.x1 - box.x0 + 1, bh = box.y1 - box.y0 + 1;
   const wall = new Uint8Array(bw * bh);
   for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) if (mask[(y + box.y0) * W + x + box.x0] || extra?.[(y + box.y0) * W + x + box.x0]) {
@@ -162,6 +162,11 @@ function enclosed(W, H, mask, box, gap, minArea, { frame = false, extra = null }
     for (let y = 0; y < bh; y++) { wall[y * bw] = 1; wall[y * bw + bw - 1] = 1; }
     const { comps } = components(bw, bh, k => !wall[k]);
     comps.sort((a, b) => b.n - a.n);
+    // 前線も壁にしたとき（edges あり）：地図の端ではない辺に接するかけらは雲域の外（前線で外側が分かれるため）（2026-10-19）
+    if (edges) {
+      const outside = c => (c.x0 <= 1 && !edges.l) || (c.x1 >= bw - 2 && !edges.r) || (c.y0 <= 1 && !edges.t) || (c.y1 >= bh - 2 && !edges.b);
+      return comps.filter(c => !outside(c) && c.n >= minArea && c.n < bw * bh * 0.3).map(c => ({ ...c, bw, ox: box.x0, oy: box.y0, gap }));
+    }
     return comps.slice(1).filter(c => c.n >= minArea && c.n < bw * bh * 0.3).map(c => ({ ...c, bw, ox: box.x0, oy: box.y0, gap }));
   }
   // 外側から塗る
@@ -172,6 +177,34 @@ function enclosed(W, H, mask, box, gap, minArea, { frame = false, extra = null }
   // 外でも壁でもない所＝内側（成分ごと）。壁の分だけ外へ広げて元の大きさに近づける
   const { comps } = components(bw, bh, k => !out[k] && !wall[k]);
   return comps.filter(c => c.n >= minArea).map(c => ({ ...c, bw, ox: box.x0, oy: box.y0, gap }));
+}
+/**
+ * 前線で分かれた雲域のかけらをまとめる（2026-10-19）
+ *   2 つのかけらの一番近い点どうしを結ぶ線が灰色の線（雲域の輪郭）を通らなければ、同じ雲域とみなす
+ */
+function mergeAcrossFront(parts, grayMask, W) {
+  if (parts.length < 2) return parts;
+  const glob = r => r.px.map(k => ((k / r.bw) | 0) + r.oy) .map((y, i) => y * W + (r.px[i] % r.bw) + r.ox);
+  const G = parts.map(glob);
+  const rim = parts.map((r, i) => {
+    const s = new Set(G[i]), out = [];
+    for (const k of G[i]) if (!s.has(k - 1) || !s.has(k + 1) || !s.has(k - W) || !s.has(k + W)) out.push(k);
+    return out;
+  });
+  const par = parts.map((_, i) => i), f = i => (par[i] === i ? i : (par[i] = f(par[i])));
+  for (let a = 0; a < parts.length; a++) for (let b = a + 1; b < parts.length; b++) {
+    let best = Infinity, pa = 0, pb = 0;
+    for (let i = 0; i < rim[a].length; i += 2) { const ka = rim[a][i], xa = ka % W, ya = (ka / W) | 0;
+      for (let j = 0; j < rim[b].length; j += 2) { const kb = rim[b][j], d = (kb % W - xa) ** 2 + (((kb / W) | 0) - ya) ** 2; if (d < best) { best = d; pa = ka; pb = kb; } } }
+    if (best > 18 * 18) continue;
+    const x0 = pa % W, y0 = (pa / W) | 0, x1 = pb % W, y1 = (pb / W) | 0, n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+    let gray = false;
+    for (let t = 0; t <= n && !gray; t++) { const x = Math.round(x0 + (x1 - x0) * t / n), y = Math.round(y0 + (y1 - y0) * t / n);
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) if (grayMask[(y + dy) * W + x + dx]) { gray = true; break; } }
+    if (!gray) par[f(a)] = f(b);
+  }
+  const by = new Map(); parts.forEach((r, i) => { const k = f(i); (by.get(k) || by.set(k, []).get(k)).push(r); });
+  return [...by.values()].map(list => list.length === 1 ? list[0] : { ...list[0], n: list.reduce((s2, r) => s2 + r.n, 0), px: list.flatMap(r => r.px) });
 }
 /** 領域の輪郭を、重心からの放射方向の一番外側で近似（72方向） */
 function outline(reg) {
@@ -347,18 +380,50 @@ export function parseFbjp(src) {
   const grayMask = new Uint8Array(W * H);
   for (let y = MAP.y0; y <= MAP.y1; y++) for (let x = MAP.x0; x <= MAP.x1; x++) { const k = y * W + x; if (px(k, isGray) && !inBox(x, y)) grayMask[k] = 1; }
   // 雲域：灰色の線で囲まれた内側
+  //   前線（赤・青の太い線）が雲域の輪郭を横切ると、灰色の輪郭が途切れて閉じない（2026-10-19）。そこで
+  //   ・近くにある灰色の線のかけらを 1 つのまとまりにし、
+  //   ・前線の線も壁として足して、輪郭＋前線で囲まれた内側を雲域にする（前線で 2 つに分かれた雲は、同じ札の雲として扱う）
+  const isFront = (r, g, b) => (r > 150 && g < 70 && b < 70) || (b > 150 && r < 60 && g < 60);
+  const frontMask = new Uint8Array(W * H);
+  for (let y = MAP.y0; y <= MAP.y1; y++) for (let x = MAP.x0; x <= MAP.x1; x++) { const k = y * W + x; if (px(k, isFront) && !inBox(x, y)) frontMask[k] = 1; }
   const regions = [];
-  const { comps: lines } = components(W, H, k => grayMask[k] === 1, MAP);
-  for (const c of lines) {
-    if (c.n < 150) continue;
-    const m = new Uint8Array(W * H); for (const k of c.px) m[k] = 1;
+  const { comps: lines0 } = components(W, H, k => grayMask[k] === 1, MAP);
+  const lines = lines0.filter(c => c.n >= 60);
+  const lp = lines.map((_, i) => i), lf = i => (lp[i] === i ? i : (lp[i] = lf(lp[i])));
+  const NEAR = 14;
+  for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {
+    const a = lines[i], b = lines[j];
+    if (a.x0 - NEAR > b.x1 || b.x0 - NEAR > a.x1 || a.y0 - NEAR > b.y1 || b.y0 - NEAR > a.y1) continue;
+    // 線の端どうしが近いか（画素で確かめる。間引いて調べる）
+    const bs = new Set(); for (const k of b.px) bs.add(((k % W) / 4 | 0) + ',' + (((k / W) | 0) / 4 | 0));
+    let near = false;
+    for (let t = 0; t < a.px.length && !near; t += 2) { const k = a.px[t], gx = (k % W) / 4 | 0, gy = ((k / W) | 0) / 4 | 0;
+      for (let dy = -3; dy <= 3 && !near; dy++) for (let dx = -3; dx <= 3; dx++) if (bs.has((gx + dx) + ',' + (gy + dy))) { near = true; break; } }
+    if (near) lp[lf(i)] = lf(j);
+  }
+  const cgroups = new Map(); lines.forEach((c, i) => { const r = lf(i); (cgroups.get(r) || cgroups.set(r, []).get(r)).push(c); });
+  let gid = 0;
+  for (const g of cgroups.values()) {
+    gid++;
+    if (g.reduce((s, c) => s + c.n, 0) < 150) continue;
+    const c = { x0: Math.min(...g.map(q => q.x0)), y0: Math.min(...g.map(q => q.y0)), x1: Math.max(...g.map(q => q.x1)), y1: Math.max(...g.map(q => q.y1)) };
+    const m = new Uint8Array(W * H); for (const q of g) for (const k of q.px) m[k] = 1;
     const box = { x0: Math.max(MAP.x0, c.x0 - 8), y0: Math.max(MAP.y0, c.y0 - 8), x1: Math.min(MAP.x1, c.x1 + 8), y1: Math.min(MAP.y1, c.y1 + 8) };
     const atEdge = c.x0 <= MAP.x0 + 3 || c.y0 <= MAP.y0 + 3 || c.x1 >= MAP.x1 - 3 || c.y1 >= MAP.y1 - 3;   // 地図の端で切れた雲域
-    for (const r of enclosed(W, H, m, box, 3, 900, { frame: atEdge })) {
+    // 前線は、灰色の線がかけらに分かれているときだけ壁にする（1 本で閉じている雲域には使わない）
+    const extra = g.length > 1 ? frontMask : null;
+    // 前線を壁にすると、前線の三角・半円の記号で内側が小さく分かれる。灰色の線をまたがずに隣り合うかけらは 1 つの雲にまとめる
+    const edges = extra && atEdge ? { l: c.x0 <= MAP.x0 + 3, r: c.x1 >= MAP.x1 - 3, t: c.y0 <= MAP.y0 + 3, b: c.y1 >= MAP.y1 - 3 } : null;
+    let parts = enclosed(W, H, m, box, 3, extra ? 100 : 900, { frame: atEdge, extra, edges });
+    if (extra) parts = mergeAcrossFront(parts, grayMask, W).filter(r => r.n >= 900);
+    for (const r of parts) {
+      r.gid = gid;
       // 輪郭の画素：内側に接する灰色の線
       const edge = new Set();
       for (const k of r.px) { const x = k % r.bw + r.ox, y = ((k / r.bw) | 0) + r.oy;
         for (let d = 1; d <= 5; d++) for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]]) { const q = (y + dy) * W + x + dx; if (grayMask[q]) edge.add(q); } }
+      // 前線の内側だけの区画（輪郭の灰色の線にほとんど接していない）は雲域ではない
+      if (extra && edge.size < 40) continue;
       regions.push({ r, poly: outline(r), edge });
     }
   }
@@ -392,12 +457,18 @@ export function parseFbjp(src) {
   regions.forEach((R, r) => {
     let i = owner.get(r);
     if (i == null) { let m = Infinity; boxes.forEach((_, j) => { if (dR[r][j] < m) { m = dR[r][j]; i = j; } }); }
+    // 引き出し線が前線などで途切れて、どの札ともつながらないとき：雲域から 220 画素以内の一番近い札（2026-10-19）
+    if (i == null) {
+      let m = 220;
+      boxes.forEach((b2, j) => { for (const p of R.poly) { const dx = Math.max(b2.x0 - p.x, 0, p.x - b2.x1), dy = Math.max(b2.y0 - p.y, 0, p.y - b2.y1), d = Math.hypot(dx, dy); if (d < m) { m = d; i = j; } } });
+    }
     const b = i != null ? boxes[i] : null;
     const cx = R.poly.reduce((s2, p) => s2 + p.x, 0) / R.poly.length, cy = R.poly.reduce((s2, p) => s2 + p.y, 0) / R.poly.length;
     const fr = b?.fr?.[0];
     // 札の分数は上から 雲（CB など）・乱気流・着氷 の順。乱気流の高さ（揺れが予想される高度）も持っておく
     const tb = b?.fr?.[1];
     res.clouds.push({ poly: R.poly.map(p => ll(p.x, p.y)), center: ll(cx, cy), cb: !!b?.cb, top: fr?.top ?? null, base: fr?.base ?? null, linked: !!b,
+      box: i ?? null, group: R.r.gid, area: R.r.n,
       turb: tb?.top ? { top: tb.top, base: tb.base ?? fr?.base ?? null } : null });
   });
   res.boxes = boxes.map(b => ({ cb: b.cb, fr: b.fr.map(f => [f.top, f.base]) }));

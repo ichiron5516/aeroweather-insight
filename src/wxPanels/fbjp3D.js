@@ -86,6 +86,9 @@ function build(res, scale, camPos) {
   // ---- 雲域：積乱雲と、揺れのある雲の層 ----
   const bb = pc.add(new Cesium.BillboardCollection({ blendOption: Cesium.BlendOption.TRANSLUCENT }));
   const queue = [];
+  // 前線で 2 つに分かれた雲域など、同じ札の雲が複数あるときは、札（高さの説明）は一番大きい雲にだけ出す（2026-10-19）
+  const labelOf = new Map();
+  for (const c of res.clouds) if (c.box != null && (!labelOf.has(c.box) || (c.area || 0) > (labelOf.get(c.box).area || 0))) labelOf.set(c.box, c);
   for (const c of res.clouds) {
     const top = (c.top || (c.cb ? 400 : 150)) * 100, base = (c.base || 20) * 100;
     const lats = c.poly.map(p => p.lat), lons = c.poly.map(p => p.lon);
@@ -108,6 +111,7 @@ function build(res, scale, camPos) {
       pc.add(puffColumn(lo, la, z0, z1, R, { seed: Math.round(la * 1000 + lo * 7) + k++, anvil }));
     }
     const cl = c.center;
+    if (c.box != null && labelOf.get(c.box) !== c) continue;
     ds.entities.add({ position: Cesium.Cartesian3.fromDegrees(cl.lon, cl.lat, top * FT * scale + 15000 * Math.min(scale, 5)),
       label: { text: (c.cb ? `積乱雲 FL${fl3(c.base || 20)}〜${fl3(c.top || 400)}` : `揺れのある雲 FL${fl3(c.base || 0)}〜${fl3(c.top || 0)}`) + (c.turb ? `\n揺れ FL${fl3(c.turb.base ?? 0)}〜${fl3(c.turb.top)}` : ''), font: '600 13px "Meiryo", sans-serif',
         fillColor: Cesium.Color.fromCssColorString('#33475b'), showBackground: true, backgroundColor: Cesium.Color.fromCssColorString('rgba(255,255,255,0.88)'),
