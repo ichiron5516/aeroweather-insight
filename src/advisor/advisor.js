@@ -149,17 +149,16 @@ function sigmetHtml(g) {
 const RISK_COL = { null: null, LGT: '#ffee58', MOD: '#ffa726', SEV: '#ef5350' };
 const LEVEL_JA = { good: '揺れ小', caution: '揺れ注意', avoid: '揺れ大' };
 
-// 開いたときの地図：日本の地上天気図（気象庁。chartOverlay.js の PROJ.sfc）の枠が、左の引き出しの右側にちょうど収まる大きさ（2026-10-19）
-//   天気図の枠の周り（四隅と各辺の途中）の緯度経度。ポーラーステレオ図法の枠を、東経140度の真上から見下ろして合わせる
-const SFC_FRAME = [[90.18, 44.88], [106.16, 54.23], [131.1, 59.65], [159.66, 58.23], [181.06, 50.87], [170.46, 40.54], [163.93, 30.16],
-  [159.62, 20.38], [156.58, 11.43], [146.96, 13.4], [136.94, 13.73], [127.09, 12.38], [117.96, 9.55], [114.15, 17.9], [108.89, 26.87], [101.36, 36.11]];
+// 開いたときの地図：日本付近全体（北海道の稚内・根室〜沖縄の与那国・波照間）を、左の引き出しの右側いっぱいに大きく表示（2026-10-19）
+//   日本の端の地点（緯度経度）が見える範囲に収まるように、北を上にして真上から見下ろす
+const JAPAN_PTS = [[141.7, 45.5], [145.8, 43.4], [145.3, 44.3], [139.8, 33.1], [131.3, 25.8], [123.0, 24.45], [123.8, 24.05], [128.6, 34.7], [129.3, 34.7]];
 function startView(viewer) {
   const cam = viewer.camera, sc = viewer.scene;
   const W = viewer.canvas.clientWidth || window.innerWidth, H = viewer.canvas.clientHeight || window.innerHeight;
   const L = Math.min(W * 0.6, window.awLayout?.insets?.().left || 0);
-  const box = { x0: L + 6, x1: W - 6, y0: 6, y1: H - 34 };          // 下は時刻の帯の分をあける
-  const pts = SFC_FRAME.map(([lo, la]) => Cesium.Cartesian3.fromDegrees(lo, la));
-  cam.setView({ destination: Cesium.Cartesian3.fromDegrees(140, 36, 9.0e6), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
+  const box = { x0: L + 30, x1: W - 40, y0: 56, y1: H - 125 };     // 上は札・ボタン、下は左下の時計（再生）と時刻の帯の分をあける
+  const pts = JAPAN_PTS.map(([lo, la]) => Cesium.Cartesian3.fromDegrees(lo, la));
+  cam.setView({ destination: Cesium.Cartesian3.fromDegrees(136, 35, 4.0e6), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
   for (let it = 0; it < 12; it++) {
     const ws = pts.map(p => Cesium.SceneTransforms.worldToWindowCoordinates(sc, p));
     const h = cam.positionCartographic.height;
@@ -178,7 +177,7 @@ function startView(viewer) {
 
 export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_URL}data/nav/` } = {}) {
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
-  // main.js の初期カメラより後に適用する。開いたときは日本の地上天気図の枠が、左の引き出しに隠れない範囲にちょうど収まるようにする（2026-10-19）
+  // main.js の初期カメラより後に適用する。開いたときは日本付近全体を、左の引き出しに隠れない範囲に大きく表示する（2026-10-19）
   setTimeout(() => { try { startView(viewer); } catch (e) { console.warn('[advisor] startView', e); viewer.camera.setView({ destination: JAPAN_RECT }); } }, 0);
 
   // 空港データベースの空港を表示。事例表示中は、事例側の空港（関西・新千歳など）のピンを隠す

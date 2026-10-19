@@ -27,6 +27,16 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
   baseLayerPicker: false,   // 右上の地図（レイヤ）切替ボタンは使わない
 });
 window.viewer = viewer;   // 開発用：Consoleからカメラ位置を取得するため
+// 地図の記号をダブルクリック（iPad はダブルタップ）しても、その記号に視点を固定しない（2026-10-19）
+//   Cesium の初期の動きでは、経路評価の札（CAT・積乱雲・TOC など）をダブルクリックすると視点がその札に固定され、
+//   「全体」「真上」「斜め」などの視点のボタンが効かなくなっていた
+viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+/** 視点の固定（追いかけ表示・lookAt）を外す。視点のボタンを押したときに最初に呼ぶ */
+function releaseCamera() {
+  viewer.trackedEntity = undefined;
+  viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+}
+window.awReleaseCamera = releaseCamera;
 // 下地の衛星写真を少し明るくする（2026-10-19）。1 が元の明るさ。明るさ・ガンマを上げると海や山の影が明るくなる
 {
   const base = viewer.imageryLayers.get(0);
@@ -791,11 +801,13 @@ function presetView(p) {
   return { ...p, height: h, lat: targetLat - h / t / 111000 };
 }
 // ---- 向きのボタン：今見ている所（画面の中心の地面）を中心に、真上・東西南北・南東斜めから見る ----
+//   ボタンは layout.js が「設定」の引き出しに移すので、#camButtons の中に限らずに探す（2026-10-19）
 //   距離は今の距離をおおむね保つ。横から見るときは、誇張した高さ（最大で約1,000km）が入るよう少し見下ろす
 {
   const VIEWS = { top: [0, -90], n: [180, -12], e: [270, -12], w: [90, -12], s: [0, -12], se: [315, -35] };
-  document.querySelectorAll('#camButtons button[data-view]').forEach(btn => btn.onclick = () => {
+  document.querySelectorAll('button[data-view]').forEach(btn => btn.onclick = () => {
     const [h, p] = VIEWS[btn.dataset.view];
+    releaseCamera();
     const cv = viewer.canvas, cam = viewer.camera;
     let target = cam.pickEllipsoid(new Cesium.Cartesian2(cv.clientWidth / 2, cv.clientHeight / 2));
     if (!target) target = Cesium.Cartesian3.fromDegrees(137, 36);            // 地球の外を見ているときは日本の中心
@@ -808,8 +820,9 @@ function presetView(p) {
       offset: new Cesium.HeadingPitchRange(Cesium.Math.toRadians(h), Cesium.Math.toRadians(p), range), duration: 1.5 });
   });
 }
-document.querySelectorAll('#camButtons button[data-cam]').forEach(btn => {
+document.querySelectorAll('button[data-cam]').forEach(btn => {
   btn.onclick = () => {
+    releaseCamera();
     // リアルタイム表示中の「全体」は日本全体を真上から
     if (btn.dataset.cam === 'all' && !CASE_MODE) { viewer.camera.flyTo({ destination: JAPAN_RECT, duration: 2.0 }); return; }
     if (btn.dataset.cam === 'hero' && flyHero()) return;

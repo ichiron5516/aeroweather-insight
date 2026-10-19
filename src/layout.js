@@ -126,8 +126,10 @@ body:not(.awLegOn) #legend{display:none !important}
 .cesium-viewer-animationContainer{left:var(--awL) !important;transition:left .2s ease}
 .cesium-viewer-timelineContainer{left:calc(var(--awL) + 169px) !important;transition:left .2s ease}
 .cesium-viewer-bottom{left:calc(var(--awL) + 172px) !important}
-#awSec{left:calc(var(--awL) + (100vw - var(--awL)) / 2) !important;width:min(960px,calc(100vw - var(--awL) - 20px)) !important;min-width:0 !important}
-#awSec.big{width:calc(100vw - var(--awL) - 20px) !important}
+/* 断面図：地図の右下に、地図の 4 分の 1 くらいの大きさで出す（3D がよく見えるように。2026-10-19）。「拡大」で大きくしたときは地図の幅いっぱい */
+#awSec{left:auto !important;right:8px !important;transform:none !important;bottom:36px !important;min-width:0 !important;
+  width:calc((100vw - var(--awL)) * 0.52) !important;height:44vh !important}
+#awSec.big{left:calc(var(--awL) + 8px) !important;right:8px !important;width:auto !important;height:min(62vh,640px) !important}
 #profilePanel{left:calc(var(--awL) + (100vw - var(--awL)) / 2) !important}
 #awSavedBanner{left:calc(var(--awL) + (100vw - var(--awL)) / 2) !important}
 #awSaved{left:calc(var(--awL) + 10px) !important}
