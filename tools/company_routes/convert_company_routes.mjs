@@ -20,6 +20,7 @@ for(const f of files){const rows=parseCSV(fs.readFileSync(DIR+f,'utf8').replace(
  for(const r of rows.slice(1)){const o=Object.fromEntries(H.map((h,i)=>[h,(r[i]??'').trim()]));
   const key=`${o.Origin}-${o.Destination} #${o.Number}`;
   if(seenKey.has(key))continue; seenKey.add(key);
+  if(+o.Number>=90&&+o.Number<=99){report.push(`${key}: No.90〜99 は登録しない（2026-10-19）`);continue}
   if(o.Disabled==='Yes'||!o.Route){report.push(`${key}: 無効（Disabled）のため登録しない`);continue}
   if(o['Deletion Date']&&o['Deletion Date']<today){report.push(`${key}: 削除日 ${o['Deletion Date']} を過ぎているため登録しない`);continue}
   let t=o.Route.split(/\s+/);const D=nav.getAirport(o.Origin),A=nav.getAirport(o.Destination);
