@@ -342,6 +342,11 @@ export function createRouteBuilder(viewer, { nav, onSaved, onResize, onRoute }) 
       box.style.display = 'block';
       update();
     },
+    /** 「クリア」（経路アドバイス）のとき：出発・到着の指定と入力を消し、空港のクリックを METAR・TAF の表示だけに戻す */
+    reset() {
+      S.dep = null; S.arr = null; S.armed = false; S.msg = null; S.odMsg = null; ta.value = '';
+      update();
+    },
     close,
   };
 }

@@ -190,9 +190,11 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
   // 空港データ（AIP）がない空港（今は無し。羽田は AIP から追加済み）。SID・STAR なしで、経路の始点・終点から表示する
   const NO_DATA = [{ icao: 'RJTT', label: 'HND 羽田（空港データなし）' }].filter(a => !aps.some(x => x.icao === a.icao));   // 空港DBに入ったら外す
   const apOpts = sel => aps.map(a => opt(a.icao, `${a.iata || a.icao} ${a.nameJa || a.nameEn || ''}`, a.icao === sel)).join('') + NO_DATA.map(a => opt(a.icao, a.label)).join('');
-  const depOptions = () => `<optgroup label="空港">${apOpts('RJBB')}</optgroup>` +
+  // 先頭の「未選択」は「クリア」の後の状態（2026-10-19）
+  const NONE = '<option value="">— 未選択 —</option>';
+  const depOptions = () => NONE + `<optgroup label="空港">${apOpts('RJBB')}</optgroup>` +
     `<optgroup label="国際線の到着便（入域する航空路）">${intlGroups('arrival').map(g => opt(g.code, g.label)).join('')}</optgroup>`;
-  const arrOptions = () => `<optgroup label="空港">${apOpts('RJCC')}</optgroup>` +
+  const arrOptions = () => NONE + `<optgroup label="空港">${apOpts('RJCC')}</optgroup>` +
     `<optgroup label="国際線の出発便（出域する航空路）">${intlGroups('departure').map(g => opt(g.code, g.label)).join('')}</optgroup>`;
   panel.innerHTML = `
     <h2>揺れ回避 経路アドバイス</h2>
@@ -265,7 +267,12 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
     $('awSave').disabled = true; $('awClear').disabled = true;
   }
   // 「クリア」：評価の結果を全部消す（保存データの表示中なら、その表示もやめる）（2026-10-18）
-  $('awClear').onclick = () => exitSaved();
+  //   出発・到着の指定も消して、経路を作るパネルを最初の状態（空港のクリックは METAR・TAF だけ）に戻す（2026-10-19）
+  $('awClear').onclick = () => {
+    exitSaved();
+    $('awDep').value = ''; $('awArr').value = '';
+    builder.reset();
+  };
   $('awList2').onclick = () => saved.toggle();
   $('awSave').onclick = async () => {
     if (!S.ranked.length || savedView.on) return;
@@ -347,6 +354,7 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
   async function evaluate({ keepView = false, select = null } = {}) {
     if (savedView.on) { savedView.hide(); saved.clearShown(); }       // 保存データの表示中なら、最新の評価に切り替える
     const dep = $('awDep').value, arr = $('awArr').value;
+    if (!dep || !arr) { $('awAdvice').textContent = '出発と到着を選んでから「評価する」を押してください（上の欄で選ぶか、左下の「経路を作り始める」から地図の空港をクリック）。'; return; }
     if (!keepView) flyToPoints(airportPts());          // まず出発〜到着の範囲を表示
     const departure = new Date(Date.now() + (+$('awT').value) * 3600e3);
     const opts = { dep, arr, departure, minFL: +$('awMin').value, maxFL: +$('awMax').value };
