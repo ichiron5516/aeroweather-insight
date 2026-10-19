@@ -33,7 +33,7 @@ window.Cesium = Cesium;   // 同上
 const advisorReady = initAdvisor(viewer);
 // AIP 取り込みパネル（「航法」の段の「📥 AIP取込」）
 initAipPanel(document.getElementById('aipBtn'));
-// iPad など小さい画面：左右のパネルを端のつまみでしまう・出す。右下のボタン群をたためる（2026-10-18）
+// iPad 横向きの割り付け：左端のアイコンの列（天気図・経路・表示・設定）と 1 列の引き出し（2026-10-19）
 initLayout();
 
 // ---- 高度誇張モード ----

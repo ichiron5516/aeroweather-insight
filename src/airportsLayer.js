@@ -46,6 +46,7 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
         polyline: { positions: Cesium.Cartesian3.fromDegreesArray([r.threshold.lon, r.threshold.lat, r.departureEnd.lon, r.departureEnd.lat]),
           width: 5, clampToGround: true, material: Cesium.Color.fromCssColorString('#eceff1'),
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 250000) },
+       properties: { kind: 'dbRunway' },
       });
     }
   }
@@ -66,6 +67,17 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
   const SPECIAL = { WBSB: 'ブルネイ', PTRO: 'パラオ', PTKR: 'パラオ' };
   const countryOf = id => SPECIAL[id] || COUNTRY[id.slice(0, 2)] || (id[0] === 'Z' ? '中国' : id[0] === 'U' ? 'ロシア' : id[0] === 'Y' ? 'オーストラリア' : '');
   const stations = new Map();
+  // 表示する・しない（「表示」の引き出しの「青丸空港」「白丸空港」。2026-10-19）。事例表示で隠す空港（caseHide）も合わせて決める
+  const vis = { dbAirport: true, wxStation: true };
+  let caseHide = null;
+  const kindOn = k => (k === 'dbRunway' ? vis.dbAirport : vis[k] !== false);
+  function refreshShow() {
+    for (const e of ds.entities.values) {
+      const k = e.properties?.kind?.getValue?.(), icao = e.properties?.icao?.getValue?.();
+      if (!k) continue;
+      e.show = kindOn(k) && !(caseHide && icao && caseHide.includes(icao));
+    }
+  }
   async function loadStations() {
     const KEY = 'aw.wxStations.v5', DAYS = 30;          // v5：範囲を地球のふち（衛星の真下から 81 度）まで広げた（前の一覧は使わない）
     try { for (const v of [1, 2, 3, 4]) localStorage.removeItem(`aw.wxStations.v${v}`); } catch { /* なし */ }
@@ -126,6 +138,7 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
           style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -10), heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.2e6) },
         properties: { kind: 'wxStation', icao },
+        show: vis.wxStation && !(caseHide && caseHide.includes(icao)),
       });
     }
     console.log(`[stations] METAR・TAF の空港 ${stations.size} か所（白丸）`);
@@ -287,7 +300,7 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
     if (s.kanji) stAirports.set(icao, a);              // 漢字の名前が届く前のものは覚えない（届いたら作り直す）
     return a;
   }
-  return {
+  const api = {
     /** 白丸の空港（METAR・TAF だけの空港）を、滑走路・SID・STAR のない空港として返す。なければ null */
     station,
     /** 空港（青いピン・白丸）のクリックを受け取る関数を登録 */
@@ -295,11 +308,12 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
     /** マウスを載せた空港の札に出す一言を返す関数（null を返すといつもの札） */
     setClickHint(fn) { hintFn = fn; },
     /** 事例表示中は、事例側で表示している空港（hide の ICAO）を隠す */
-    setCaseMode(on, hide = []) {
-      for (const e of ds.entities.values) {
-        const icao = e.properties?.icao?.getValue?.();
-        if (icao) e.show = !(on && hide.includes(icao));
-      }
-    },
+    setCaseMode(on, hide = []) { caseHide = on ? hide : null; refreshShow(); },
+    /** 青丸（'dbAirport'：空港データベースの空港と滑走路）・白丸（'wxStation'：METAR・TAF の空港）を表示する・しない */
+    setVisible(kind, on) { if (!(kind in vis)) return; vis[kind] = !!on; refreshShow(); },
+    get visible() { return { ...vis }; },
   };
+  window.awAirports = api;
+  window.dispatchEvent(new Event('aw:airports-ready'));
+  return api;
 }

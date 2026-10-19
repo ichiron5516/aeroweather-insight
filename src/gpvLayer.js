@@ -572,6 +572,8 @@ export function createGpvPanel(viewer) {
   // 右下に置く：右下のボタン群（#camButtons）のすぐ上。上に余裕がなければボタン群の左横
   function place() {
     if (P.hidden || P.dataset.moved) return;
+    // 左のアイコンの列の割り付け（layout.js）：右下（凡例のボタンの上）に置く
+    if (window.awLayout?.rail) { Object.assign(P.style, { left: 'auto', top: 'auto', right: '8px', bottom: '82px', maxHeight: 'calc(100vh - 180px)' }); return; }
     const cb = document.getElementById('camButtons')?.getBoundingClientRect();
     Object.assign(P.style, { left: 'auto', top: 'auto', right: '10px', bottom: '40px', maxHeight: 'calc(100vh - 140px)' });
     if (!cb) return;

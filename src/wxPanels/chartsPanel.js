@@ -1175,8 +1175,9 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     if (!v) return;
     const W = viewer.canvas.clientWidth || window.innerWidth, H = viewer.canvas.clientHeight || window.innerHeight;
     const adv = document.getElementById('awAdv');
-    const lp = adv && adv.offsetParent ? adv.getBoundingClientRect().right + 10 : 0;
-    const rp = W - P.getBoundingClientRect().left + 10;
+    const ins = window.awLayout?.insets?.();                  // 左のアイコンの列と引き出し（layout.js）
+    const lp = ins ? ins.left + 10 : adv && adv.offsetParent ? adv.getBoundingClientRect().right + 10 : 0;
+    const rp = ins ? ins.right + 10 : W - P.getBoundingClientRect().left + 10;
     const gap = W - lp - rp, narrow = gap < 400, vis = narrow ? 1 : gap / W;
     const fr = viewer.camera.frustum, asp = W / H;
     const fovx = asp >= 1 ? fr.fov : 2 * Math.atan(Math.tan(fr.fov / 2) * asp), fovy = asp >= 1 ? 2 * Math.atan(Math.tan(fr.fov / 2) / asp) : fr.fov;

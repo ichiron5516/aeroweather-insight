@@ -129,13 +129,42 @@ const CSS = `
 #awAdv .hint{font-size:10.5px;color:#9fb3c8;font-weight:400}
 `;
 
+// SIGMET の説明（箱をクリックしたときの札）
+const SG_HAZ = { TS: '雷雨（積乱雲）', TSGR: '雷雨（ひょうを伴う）', TURB: '乱気流', MTW: '山岳波', ICE: '着氷', VA: '火山灰', TC: '台風（熱帯低気圧）', DS: '砂じん嵐', SS: '砂じん嵐', RDOACT: '放射性物質' };
+const SG_QUAL = { EMBD: '雲に埋もれた（EMBD）', OBSC: '見えにくい（OBSC）', FRQ: '頻繁（FRQ）', SQL: 'スコールライン（SQL）', ISOL: '孤立した（ISOL）', OCNL: '時々（OCNL）', SEV: '強い（SEV）', MOD: '並（MOD）', HVY: '強い（HVY）' };
+const escH = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function sigmetHtml(g) {
+  const fl = ft => (ft <= 0 ? 'SFC' : 'FL' + String(Math.round(ft / 100)).padStart(3, '0'));
+  const hhmm = d => (d ? `${String(d.getUTCDate()).padStart(2, '0')}日 ${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}Z` : '');
+  const haz = SG_HAZ[g.hazard] || g.hazard || '不明';
+  const qual = String(g.qualifier || '').split(/\s+/).filter(Boolean).map(q => SG_QUAL[q] || q).join('・');
+  return [`<b style="color:#ea80fc;font-size:13.5px">SIGMET　${escH(haz)}</b>`,
+    qual && `程度：${escH(qual)}`,
+    `高度：${fl(g.baseFt)} 〜 ${g.topKnown === false ? '上限不明' : fl(g.topFt)}`,
+    (g.from || g.to) && `有効：${hhmm(g.from)} 〜 ${hhmm(g.to)}`,
+    g.fir && `FIR：${escH(g.fir)}`,
+    g.raw && `<pre style="white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,.35);padding:5px 6px;border-radius:4px;font:11px ui-monospace,Menlo,monospace;margin:4px 0 0">${escH(g.raw)}</pre>`,
+  ].filter(Boolean).join('<br>');
+}
 const RISK_COL = { null: null, LGT: '#ffee58', MOD: '#ffa726', SEV: '#ef5350' };
 const LEVEL_JA = { good: '揺れ小', caution: '揺れ注意', avoid: '揺れ大' };
 
+// 開いたときの地図の範囲：女満別（RJCM）・釧路（RJCK）〜香港（VHHH）。左のアイコンの列と引き出し（layout.js）の分だけ西に広げる
+const START = { w: 110.8, e: 147.0, s: 19.8, n: 46.6 };   // 札・ボタンに隠れないよう少し余白をとる
+function startRect(viewer) {
+  const W = viewer.canvas.clientWidth || window.innerWidth, H = viewer.canvas.clientHeight || window.innerHeight;
+  const L = Math.min(W * 0.6, window.awLayout?.insets?.().left || 0), visW = W - L;
+  const k = Math.cos(((START.s + START.n) / 2) * Math.PI / 180);            // 経度1度の長さ（緯度1度に対する割合）
+  const sc = Math.max((START.e - START.w) * k / visW, (START.n - START.s) / (H - 40));   // 1px あたりの度（下の時刻の帯の分を引く）
+  const cLon = (START.w + START.e) / 2 - (L / 2) * sc / k, cLat = (START.s + START.n) / 2 - 20 * sc;
+  const hw = W / 2 * sc / k, hh = H / 2 * sc;
+  return Cesium.Rectangle.fromDegrees(cLon - hw, cLat - hh, cLon + hw, cLat + hh);
+}
+
 export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_URL}data/nav/` } = {}) {
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
-  // main.js の初期カメラより後に適用する
-  setTimeout(() => viewer.camera.setView({ destination: JAPAN_RECT }), 0);
+  // main.js の初期カメラより後に適用する。開いたときは 北海道（女満別・釧路）〜香港 を、左の引き出しに隠れない範囲に収める（2026-10-19）
+  setTimeout(() => viewer.camera.setView({ destination: startRect(viewer) }), 0);
 
   // 空港データベースの空港を表示。事例表示中は、事例側の空港（関西・新千歳など）のピンを隠す
   const airportsReady = initAirportsLayer(viewer);
@@ -163,6 +192,22 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
   viewer.dataSources.add(ds);
   // main.js の再読込（dataSources.removeAll）で消えたら付け直す
   viewer.dataSources.dataSourceRemoved.addEventListener((_, d) => { if (d === ds) setTimeout(() => { viewer.dataSources.add(ds); render(); }, 0); });
+  // SIGMET の箱をクリック → 説明（種類・高度・有効時刻・電文）を札で出す。ほかの所をクリックしたら消す
+  const sgPop = Object.assign(document.createElement('div'), { id: 'awSgPop' });
+  Object.assign(sgPop.style, { position: 'absolute', zIndex: 32, display: 'none', background: 'rgba(20,30,45,0.96)', color: '#fff',
+    font: '12px/1.55 "Meiryo", sans-serif', border: '1px solid #e040fb', borderRadius: '6px', padding: '6px 26px 6px 10px', maxWidth: '360px' });
+  document.body.appendChild(sgPop);
+  sgPop.addEventListener('click', e => { if (e.target.dataset.x != null) sgPop.style.display = 'none'; });
+  new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction(ev => {
+    const hits = [...new Set(viewer.scene.drillPick(ev.position, 6).map(h => h.id).filter(x => x?.awSigmet).map(x => x.awSigmet))];
+    if (!hits.length) { sgPop.style.display = 'none'; return; }
+    sgPop.innerHTML = hits.slice(0, 3).map(sigmetHtml).join('<hr style="border:none;border-top:1px solid #4a2d5c;margin:5px 0">') +
+      '<span data-x style="position:absolute;right:7px;top:3px;cursor:pointer;color:#aaa;font-size:15px">×</span>';
+    const W = viewer.scene.canvas.clientWidth, H = viewer.scene.canvas.clientHeight;
+    sgPop.style.display = 'block';
+    sgPop.style.left = Math.max(10, Math.min(ev.position.x + 14, W - sgPop.offsetWidth - 10)) + 'px';
+    sgPop.style.top = Math.max(10, Math.min(ev.position.y + 14, H - sgPop.offsetHeight - 10)) + 'px';
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   const get = async f => { const r = await fetch(dataBase + f); if (!r.ok) throw new Error(f); return r.json(); };
   try {
@@ -585,30 +630,16 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
         description: `晴天乱気流 ${k.c.label} TI ${k.ti}（${k.lay.lo}-${k.lay.hi}hPa）`,
       }));
     }
-    // SIGMET
-    // SIGMET：対象の高度（下限〜上限）の箱。札に高度と有効時刻、箱の上下の面に FL を出す
+    // SIGMET：対象の高度（下限〜上限）の箱だけを出す。説明（種類・高度・有効時刻・電文）は、箱をクリックしたときに出す（2026-10-19）
     if (S.layers.sigmet) for (const g of S.wx.sigmets || []) {
       const pos = Cesium.Cartesian3.fromDegreesArray(g.coords.flatMap(c => [c.lon, c.lat]));
-      const fl = ft => (ft <= 0 ? 'SFC' : 'FL' + String(Math.round(ft / 100)).padStart(3, '0'));
-      const topFt = Math.min(g.topFt, 50000), range = `${fl(g.baseFt)}〜${g.topKnown === false ? '上限不明' : fl(g.topFt)}`;
-      const until = g.to ? `${String(g.to.getUTCHours()).padStart(2, '0')}${String(g.to.getUTCMinutes()).padStart(2, '0')}Z まで` : '';
-      const ctr = g.coords.reduce((a, c) => ({ lat: a.lat + c.lat / g.coords.length, lon: a.lon + c.lon / g.coords.length }), { lat: 0, lon: 0 });
-      const col = Cesium.Color.fromCssColorString('#e040fb'), txt = Cesium.Color.fromCssColorString('#ea80fc');
-      const bg = Cesium.Color.fromCssColorString('rgba(20,30,45,0.85)');
-      ds.entities.add({
+      const topFt = Math.min(g.topFt, 50000);
+      const col = Cesium.Color.fromCssColorString('#e040fb');
+      const e = ds.entities.add({
         polygon: { hierarchy: pos, height: M(g.baseFt), extrudedHeight: M(topFt), perPositionHeight: false,
           material: col.withAlpha(0.15), outline: true, outlineColor: col },
-        position: Cesium.Cartesian3.fromDegrees(ctr.lon, ctr.lat, M(topFt)),
-        label: { text: `SIGMET ${g.hazard} ${g.qualifier}`.trim() + `\n${range}` + (until ? `  ${until}` : ''), font: '600 13px Meiryo', fillColor: txt,
-          showBackground: true, backgroundColor: bg, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, pixelOffset: new Cesium.Cartesian2(0, -6),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY },
-        description: `SIGMET ${g.hazard} ${g.qualifier}（${g.fir}） ${range} ${until}<br><pre>${g.raw || ''}</pre>`,
       });
-      // 下限の面にも高度の札（上限の札と離れて、厚みが読み取れるように）
-      if (g.baseFt > 0) ds.entities.add({ position: Cesium.Cartesian3.fromDegrees(ctr.lon, ctr.lat, M(g.baseFt)),
-        label: { text: `下限 ${fl(g.baseFt)}`, font: '12px Meiryo', fillColor: txt, showBackground: true, backgroundColor: bg,
-          verticalOrigin: Cesium.VerticalOrigin.TOP, pixelOffset: new Cesium.Cartesian2(0, 6), disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 6e6) } });
+      e.awSigmet = g;
     }
     // 悪天予想図（選んだ経路にかかる範囲だけ）：下限〜上限の半透明の箱。国内＝FBJP、国際＝SIGWX
     if (S.layers.fcst && S.wx.fcstBands?.length) {
@@ -730,9 +761,10 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
       if (Math.cos(h) < 0) h = brg + Math.PI / 2;
       // 左右のパネルの間に収まる距離と、見える範囲の中央へのずらし量
       const W = viewer.canvas.clientWidth || window.innerWidth;
-      const lp = (panel.getBoundingClientRect().right || 360) + 10;
+      const ins = window.awLayout?.insets?.();                // 左のアイコンの列と引き出し（layout.js）
+      const lp = ins ? ins.left + 10 : (panel.getBoundingClientRect().right || 360) + 10;
       const rpEl = document.getElementById('awWx');
-      const rp = rpEl ? W - rpEl.getBoundingClientRect().left + 10 : 360;
+      const rp = ins ? ins.right + 10 : rpEl ? W - rpEl.getBoundingClientRect().left + 10 : 360;
       const narrow = W - lp - rp < 400;                         // 画面が狭いときはパネルを考慮しない
       const vis = narrow ? 1 : Math.max(0.5, (W - lp - rp) / W);
       // 下の断面図の分だけ、縦に見える範囲が狭くなる
@@ -768,9 +800,10 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
     const lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
     let w = Math.min(...lons) - 0.8, e = Math.max(...lons) + 0.8, s = Math.min(...lats) - 0.8, n = Math.max(...lats) + 0.8;
     const W = viewer.canvas.clientWidth || window.innerWidth;
-    const lp = (panel.getBoundingClientRect().right || 360) + 10;
+    const ins = window.awLayout?.insets?.();                  // 左のアイコンの列と引き出し（layout.js）
+    const lp = ins ? ins.left + 10 : (panel.getBoundingClientRect().right || 360) + 10;
     const rpEl = document.getElementById('awWx');
-    const rp = rpEl ? W - rpEl.getBoundingClientRect().left + 10 : 360;
+    const rp = ins ? ins.right + 10 : rpEl ? W - rpEl.getBoundingClientRect().left + 10 : 360;
     if (W < 600) {                                            // 画面が狭い・非表示のときはパネルを考慮しない
       viewer.camera.flyTo({ destination: Cesium.Rectangle.fromDegrees(w, s, e, n), duration: 1.5 }); return;
     }
