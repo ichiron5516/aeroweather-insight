@@ -291,6 +291,21 @@ export function initLayout() {
   ];
   function setApt(kind) { S.apt[kind] = !S.apt[kind]; window.awAirports?.setVisible(kind, S.apt[kind]); refresh(); }
   window.addEventListener('aw:airports-ready', () => { for (const k of Object.keys(S.apt)) window.awAirports?.setVisible(k, S.apt[k]); });
+  // 地球全体を見るところまで引いたら（カメラの高さ 1万km 以上）、青丸空港をいったん消す（2026-10-25）。
+  //   また出すときは「地図の線」の「青丸空港」で。引いたままでも出せる（もう一度引き直すまでは消さない）
+  {
+    const WORLD_H = 1.0e7;
+    let world = false;
+    const watch = () => {
+      const v = window.viewer; if (!v) { setTimeout(watch, 1000); return; }
+      v.camera.moveEnd.addEventListener(() => {
+        const now = v.camera.positionCartographic.height >= WORLD_H;
+        if (now && !world && S.apt.dbAirport) setApt('dbAirport');
+        world = now;
+      });
+    };
+    watch();
+  }
   if (window.awAirports) for (const k of Object.keys(S.apt)) window.awAirports.setVisible(k, S.apt[k]);
 
   const ckHtml = it => it.h ? `<div class="mh">${it.h}</div>`

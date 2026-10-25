@@ -25,15 +25,18 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
   try { db = dataUrl ? await (await fetch(dataUrl)).json() : await loadAirportDb(); } catch (e) { console.warn('[airports]', e); return null; }
   const short = s => s.replace(/（.*?）/g, '').replace(/国際空港|空港|飛行場/g, '');
 
+  // 丸と名前は地面に貼り付け（CLAMP_TO_GROUND）にせず、空港の標高（楕円体高）の位置に置く（2026-10-25）
+  //   地球全体を見ているときは粗い地形で高さを決めるため、貼り付けだと丸と名前がバンコク・シンガポールなどで大きくずれていた
+  const ftM = 0.3048;
   for (const a of Object.values(db.airports)) {
     ds.entities.add({
       id: `db-${a.icao}`,
-      position: Cesium.Cartesian3.fromDegrees(a.arp.lon, a.arp.lat),
+      position: Cesium.Cartesian3.fromDegrees(a.arp.lon, a.arp.lat, ((+a.elevationFt || 0) + (+a.geoidUndulationFt || 0)) * ftM),
       point: { pixelSize: 9, color: Cesium.Color.fromCssColorString('#4fc3f7'), outlineColor: Cesium.Color.WHITE, outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        disableDepthTestDistance: Number.POSITIVE_INFINITY },
       label: { text: `${a.iata || a.icao} ${short(a.nameJa || a.nameEn || '')}`, font: '600 13px "Meiryo", sans-serif', fillColor: Cesium.Color.WHITE,
         outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new Cesium.Cartesian2(0, -16), heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        pixelOffset: new Cesium.Cartesian2(0, -16),
         disableDepthTestDistance: Number.POSITIVE_INFINITY },
       properties: { kind: 'dbAirport', icao: a.icao },
     });
@@ -152,11 +155,11 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
       if (db.airports[icao]) continue;                 // 空港データベースの空港は青いピンで表示済み（クリックで同じ METAR・TAF）
       stations.set(icao, { icao, site, lat, lon, elev, hasM, hasT });
       ds.entities.add({
-        id: `wx-${icao}`, position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        id: `wx-${icao}`, position: Cesium.Cartesian3.fromDegrees(lon, lat, +elev || 0),   // 標高（m）の位置に置く（地面に貼り付けない）
         point: { pixelSize: 6, color: Cesium.Color.WHITE, outlineColor: Cesium.Color.fromCssColorString('#263238'), outlineWidth: 1,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+          disableDepthTestDistance: Number.POSITIVE_INFINITY },
         label: { text: icao, font: '11px "Meiryo", sans-serif', fillColor: Cesium.Color.WHITE, outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -10), heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -10),
           disableDepthTestDistance: Number.POSITIVE_INFINITY, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.2e6) },
         properties: { kind: 'wxStation', icao },
         show: vis.wxStation && !(caseHide && caseHide.includes(icao)),
