@@ -80,7 +80,8 @@ const CSS = `
 .awMenu .navLg{display:flex;flex-direction:column;gap:2px;margin:0 0 4px 27px;font-size:10.5px;color:#e0e0e0}
 .awMenu .navLg i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin:0 3px 0 2px}
 /* ---- 地図上部のプルダウン ---- */
-#awTop{position:absolute;top:6px;right:84px;z-index:50;display:flex;gap:5px;align-items:flex-start}
+#awTop{position:absolute;top:6px;right:84px;left:calc(var(--awL) + 8px);z-index:50;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px;align-items:flex-start;pointer-events:none;transition:left .2s ease}
+#awTop>.dd{pointer-events:auto}
 #awTop>.dd{position:relative}
 #awTop>.dd>button{background:rgba(20,30,45,.94);color:#fff;border:1px solid #8fd0ff;border-radius:7px;font:12.5px "Meiryo",sans-serif;
   padding:7px 11px;cursor:pointer;min-height:36px;white-space:nowrap;touch-action:manipulation}
@@ -121,7 +122,9 @@ const CSS = `
 #awDrwRoute #awAdv .tg{flex:1 1 40%}
 /* ---- 天気図の引き出し（#awWx）：見本は小さめ・1 列。押すと地図に重ねる ---- */
 #awWx{padding:8px 8px 40px !important;background:rgba(16,25,37,.97) !important;border-left:none !important;border-right:1px solid #2b3f55 !important;box-shadow:none !important}
-#awWx h2{font-size:14px !important}
+#awWx h2{font-size:14px !important;flex-wrap:wrap}
+#awWx h2 [data-awhide]{margin-left:auto;font:12px "Meiryo",sans-serif;color:#cfe3f5;background:#0f1c2b;border:1px solid #47617d;border-radius:5px;padding:3px 8px;cursor:pointer;min-height:30px}
+#awWx h2 [data-awhide]:hover{border-color:#8fd0ff;color:#fff}
 #awWx .awGrpSel{width:100%;margin:0 0 6px;background:#0f1c2b;color:#fff;border:1px solid #47617d;border-radius:6px;font:12.5px "Meiryo",sans-serif;padding:6px 8px;min-height:34px}
 #awWx .grp{margin:10px 0 4px !important}
 #awWx .it{margin-bottom:12px !important;padding-bottom:8px;border-bottom:1px solid #1f3043}
@@ -298,10 +301,27 @@ export function initLayout() {
     let world = false;
     const watch = () => {
       const v = window.viewer; if (!v) { setTimeout(watch, 1000); return; }
+      const C = window.Cesium;
+      // 地球全体（2D・3D とも）を見るときは、日本（東経137度・北緯30度）を真ん中にする（2026-10-25）
+      const centerJapan = (h, duration = 1.2) => v.camera.flyTo({ destination: C.Cartesian3.fromDegrees(137, 30, h),
+        orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 }, duration });
       v.camera.moveEnd.addEventListener(() => {
-        const now = v.camera.positionCartographic.height >= WORLD_H;
-        if (now && !world && S.apt.dbAirport) setApt('dbAirport');
+        const h = v.camera.positionCartographic.height, now = h >= WORLD_H;
+        if (now && !world) {
+          if (S.apt.dbAirport) setApt('dbAirport');
+          centerJapan(Math.min(h, 4.0e7));
+        }
         world = now;
+      });
+      // 地球儀のボタンで 2D の地図・2.5D（Columbus）に切り替えたときは、日本の側を真ん中に、西はイギリス・アイルランド（西経10度）から
+      //   東はブラジルの東端（西経35度）までが余白つきで入る範囲にする（2026-10-25）。日付変更線をまたぐので west > east の四角。
+      //   両方を入れると東西 348 度になり、真ん中は東経156度（日本は真ん中より少し左）
+      const WORLD_RECT = C.Rectangle.fromDegrees(-18, -58, -30, 74);   // 端に少し余白
+      v.scene.morphComplete.addEventListener(() => {
+        if (v.scene.mode === C.SceneMode.SCENE3D) return;
+        world = true;
+        if (S.apt.dbAirport) setApt('dbAirport');
+        v.camera.setView({ destination: WORLD_RECT });
       });
     };
     watch();
@@ -391,6 +411,14 @@ export function initLayout() {
     if (!P.querySelector('.it') || !dash) return;
     P.dataset.awGrp = '1';
     stash(dash);                                       // 元の「気象」のボタン（ここから押す）
+    // 見出しの右に「しまう」（2026-10-25）。左端のアイコンの列はいつも出したまま。また出すときは「天気図」のアイコン
+    const h2 = P.querySelector('h2');
+    if (h2 && !h2.querySelector('[data-awhide]')) {
+      const hb = Object.assign(document.createElement('button'), { textContent: '◀ しまう', title: '天気図の一覧をしまう（左の「天気図」のアイコンでまた出す）' });
+      hb.dataset.awhide = '1';
+      hb.onclick = () => { S.open = null; apply(); };
+      h2.appendChild(hb);
+    }
     for (const id of ['upper3dSt', 'ct3dSt']) { const e = $(id); if (e) topSt.appendChild(e); }
     // 図のない項目を、種類ごとに一覧の後ろ（国際悪天は FBJP の後ろ）に足す
     const anBtns = [...dash.querySelectorAll('[data-an]')], seaBtns = [...dash.querySelectorAll('[data-sea]')];
