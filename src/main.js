@@ -24,6 +24,9 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
   animation: true,
   infoBox: false,
   selectionIndicator: true,
+  baseLayer: Cesium.ImageryLayer.fromProviderAsync(
+    Cesium.IonImageryProvider.fromAssetId(3954)
+  ),
   baseLayerPicker: false,   // 右上の地図（レイヤ）切替ボタンは使わない
   homeButton: false,        // 右上の家のボタン（地球全体）は使わない。「全体」は地図上部の「視点」で選ぶ（2026-10-25）
 });
