@@ -10,6 +10,12 @@ export function createVarLayer(viewer) {
   viewer.dataSources.add(ds);
   ds.show = false;
   // main.js の再読込（高度の倍率を変えたときなどの dataSources.removeAll）で消えたら付け直す（2026-10-25。消えたままで表示できなかった）
+  // 2D・2.5D・3D を切り替えたら引き直す（2026-10-25）
+  viewer.scene.morphComplete.addEventListener(() => {
+    // 切り替え直後の視点（日本中心の世界全体など）が描かれてから引き直す
+    const off = viewer.scene.postRender.addEventListener(() => { off(); lastKey = ''; if (on) rebuild(); });
+    viewer.scene.requestRender();
+  });
   viewer.dataSources.dataSourceRemoved.addEventListener((_, d) => { if (d === ds) setTimeout(() => { if (!viewer.dataSources.contains(ds)) viewer.dataSources.add(ds); }, 0); });
   let on = false, lastKey = '', remove = null, removeTick = null;
   const COL = Cesium.Color.fromCssColorString('#e040fb');
@@ -17,7 +23,25 @@ export function createVarLayer(viewer) {
   box.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);bottom:34px;white-space:nowrap;z-index:20;padding:4px 8px;border-radius:6px;background:rgba(20,10,30,.78);border:1px solid #e040fb;color:#f3e5f5;font:12px "Meiryo",sans-serif;display:none;pointer-events:none';
   (viewer.container || document.body).appendChild(box);
 
+  // 2D・2.5D では computeViewRectangle が地図のつながり（日付変更線の先）を正しく返さないため、画面の端の経緯度から決める（2026-10-25）
+  function flatRect() {
+    const D = Cesium.Math.toDegrees, cv = viewer.scene.canvas, W = cv.clientWidth, H = cv.clientHeight;
+    const ll = (x, y) => { const p = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x, y)); return p ? Cesium.Cartographic.fromCartesian(p) : null; };
+    let c = ll(W / 2, H / 2);
+    let span;
+    if (viewer.scene.mode === Cesium.SceneMode.SCENE2D) {
+      // 2D はカメラの真下が画面の真ん中、カメラの高さ＝画面の横幅（m）。地図の切り替え直後でも正しい値になる
+      const pc = viewer.camera.positionCartographic;
+      c = pc; span = Math.max(pc.height, viewer.camera.frustum.right - viewer.camera.frustum.left) / (2 * Math.PI * 6378137) * 360;
+    }
+    if (!c) return { w: -180, e: 180, s: -80, n: 80 };
+    if (span === undefined) { const a = ll(0, H / 2), b = ll(W, H / 2); span = a && b ? (((D(b.longitude) - D(a.longitude)) % 360 + 360) % 360 || 360) : 360; }
+    span = Math.min(360, span * 1.1);
+    const top = ll(W / 2, 0), bot = ll(W / 2, H);
+    return { w: D(c.longitude) - span / 2, e: D(c.longitude) + span / 2, s: bot ? D(bot.latitude) - 5 : -85, n: top ? D(top.latitude) + 5 : 85 };
+  }
   function viewRect() {
+    if (viewer.scene.mode !== Cesium.SceneMode.SCENE3D) { const f = flatRect(); return { ...f, s: Math.max(-80, f.s), n: Math.min(84, f.n) }; }
     const r = viewer.camera.computeViewRectangle(viewer.scene.globe.ellipsoid);
     if (!r) return { w: -180, e: 180, s: -80, n: 80 };
     let w = Cesium.Math.toDegrees(r.west), e = Cesium.Math.toDegrees(r.east);
@@ -104,14 +128,14 @@ export function createVarLayer(viewer) {
     ds.entities.suspendEvents();
     ds.entities.removeAll();
     const lab = { font: 'bold 12px "Meiryo", sans-serif', fillColor: COL.brighten(0.4, new Cesium.Color()), outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-      style: Cesium.LabelStyle.FILL_AND_OUTLINE, disableDepthTestDistance: Number.POSITIVE_INFINITY, heightReference: Cesium.HeightReference.CLAMP_TO_GROUND };
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE, disableDepthTestDistance: Number.POSITIVE_INFINITY };
     for (let lv = Math.ceil(Math.max(lo, -60) / step) * step; lv <= Math.min(hi, 60); lv += step) {
       for (const line of contours(v, rows, cols, s, w, d, lv)) {
         const pts = line.filter((p, k) => k === 0 || Math.abs(p[0] - line[k - 1][0]) + Math.abs(p[1] - line[k - 1][1]) < d * 3);
         if (pts.length < 3) continue;
         const zero = lv === 0;
         ds.entities.add({ polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(pts.flat()), clampToGround: true, width: zero ? 2.4 : 1.6,
+          positions: Cesium.Cartesian3.fromDegreesArray(pts.flat()), clampToGround: false, width: zero ? 2.4 : 1.6,
           material: zero ? COL.withAlpha(0.95) : new Cesium.PolylineDashMaterialProperty({ color: COL.withAlpha(0.9), dashLength: 14 }),
         } });
         // 目盛り：線の長さに応じて 1〜3 か所
@@ -122,6 +146,9 @@ export function createVarLayer(viewer) {
         }
       }
     }
+    // 線は地面に貼り付けず（clampToGround は作るのが遅く、2D の地図では日付変更線の東側に出なかった）、高さ 0 に引く。
+    //   山などの地形に隠れる所も見えるように、隠れた部分も同じ色で描く（2026-10-25）
+    for (const e of ds.entities.values) if (e.polyline) e.polyline.depthFailMaterial = e.polyline.material;
     ds.entities.resumeEvents();
     viewer.scene.requestRender();
   }

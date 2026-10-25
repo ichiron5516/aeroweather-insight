@@ -1,6 +1,6 @@
 // 緯度・経度の線（2026-10-18）
 //   ・カメラの高さで間隔を変える（遠い：10° → 5° → 2° → 1° → 近い：30'）
-//   ・見えている範囲だけ線を引き、カメラが止まるたびに引き直す（地形に沿わせる clampToGround）
+//   ・見えている範囲だけ線を引き、カメラが止まるたびに引き直す（高さ 0 に引き、地形に隠れた所も描く。2026-10-25 までは clampToGround）
 //   ・画面の真ん中を通る経線の上に緯度、緯線の上に経度の目盛りを出す。0°・赤道・180° と 5 の倍数の線は少し太く
 import * as Cesium from 'cesium';
 
@@ -18,6 +18,12 @@ export function createGridLayer(viewer) {
   viewer.dataSources.add(ds);
   ds.show = false;
   // main.js の再読込（高度の倍率を変えたときなどの dataSources.removeAll）で消えたら付け直す（2026-10-25。消えたままで表示できなかった）
+  // 2D・2.5D・3D を切り替えたら引き直す（2026-10-25）
+  viewer.scene.morphComplete.addEventListener(() => {
+    // 切り替え直後の視点（日本中心の世界全体など）が描かれてから引き直す
+    const off = viewer.scene.postRender.addEventListener(() => { off(); lastKey = ''; if (on) rebuild(); });
+    viewer.scene.requestRender();
+  });
   viewer.dataSources.dataSourceRemoved.addEventListener((_, d) => { if (d === ds) setTimeout(() => { if (!viewer.dataSources.contains(ds)) viewer.dataSources.add(ds); }, 0); });
   let on = false, lastKey = '', remove = null;
 
@@ -25,7 +31,25 @@ export function createGridLayer(viewer) {
   const MAJOR = Cesium.Color.fromCssColorString('#ffffff').withAlpha(0.75);
   const SPECIAL = Cesium.Color.fromCssColorString('#ffd54f').withAlpha(0.85);
 
+  // 2D・2.5D では computeViewRectangle が地図のつながり（日付変更線の先）を正しく返さないため、画面の端の経緯度から決める（2026-10-25）
+  function flatRect() {
+    const D = Cesium.Math.toDegrees, cv = viewer.scene.canvas, W = cv.clientWidth, H = cv.clientHeight;
+    const ll = (x, y) => { const p = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x, y)); return p ? Cesium.Cartographic.fromCartesian(p) : null; };
+    let c = ll(W / 2, H / 2);
+    let span;
+    if (viewer.scene.mode === Cesium.SceneMode.SCENE2D) {
+      // 2D はカメラの真下が画面の真ん中、カメラの高さ＝画面の横幅（m）。地図の切り替え直後でも正しい値になる
+      const pc = viewer.camera.positionCartographic;
+      c = pc; span = Math.max(pc.height, viewer.camera.frustum.right - viewer.camera.frustum.left) / (2 * Math.PI * 6378137) * 360;
+    }
+    if (!c) return { w: -180, e: 180, s: -80, n: 80 };
+    if (span === undefined) { const a = ll(0, H / 2), b = ll(W, H / 2); span = a && b ? (((D(b.longitude) - D(a.longitude)) % 360 + 360) % 360 || 360) : 360; }
+    span = Math.min(360, span * 1.1);
+    const top = ll(W / 2, 0), bot = ll(W / 2, H);
+    return { w: D(c.longitude) - span / 2, e: D(c.longitude) + span / 2, s: bot ? D(bot.latitude) - 5 : -85, n: top ? D(top.latitude) + 5 : 85 };
+  }
   function viewRect() {
+    if (viewer.scene.mode !== Cesium.SceneMode.SCENE3D) { const f = flatRect(); return { ...f, s: Math.max(-85, f.s), n: Math.min(85, f.n) }; }
     const r = viewer.camera.computeViewRectangle(viewer.scene.globe.ellipsoid);
     const c = viewer.camera.positionCartographic;
     if (!r) return { w: -180, e: 180, s: -80, n: 80, lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) };
@@ -64,7 +88,7 @@ export function createGridLayer(viewer) {
       ds.entities.add({ polyline: {
         positions: Cesium.Cartesian3.fromDegreesArray([lon, s, lon, (s + n) / 2, lon, n]),
         width: sp || big(lon) ? 1.6 : 1, material: sp ? SPECIAL : big(lon) ? MAJOR : LINE,
-        clampToGround: true, arcType: Cesium.ArcType.GEODESIC,
+        clampToGround: false, arcType: Cesium.ArcType.GEODESIC,
       } });
     }
     // 緯線（等緯度なので RHUMB。長いときは 30° ごとに区切る）
@@ -76,13 +100,13 @@ export function createGridLayer(viewer) {
       ds.entities.add({ polyline: {
         positions: Cesium.Cartesian3.fromDegreesArray(pts),
         width: sp || big(lat) ? 1.6 : 1, material: sp ? SPECIAL : big(lat) ? MAJOR : LINE,
-        clampToGround: true, arcType: Cesium.ArcType.RHUMB,
+        clampToGround: false, arcType: Cesium.ArcType.RHUMB,
       } });
     }
     // 目盛り：画面の真ん中に近い経線・緯線の上
     const lab = { font: '12px "Meiryo", sans-serif', fillColor: Cesium.Color.WHITE, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
       style: Cesium.LabelStyle.FILL_AND_OUTLINE, disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, pixelOffset: new Cesium.Cartesian2(4, -4),
+      pixelOffset: new Cesium.Cartesian2(4, -4),
       horizontalOrigin: Cesium.HorizontalOrigin.LEFT, verticalOrigin: Cesium.VerticalOrigin.BOTTOM };
     let cLon = Math.round(C.lon / step) * step; while (cLon < w) cLon += 360; while (cLon > e) cLon -= 360;
     const cLat = Math.max(s, Math.min(n, Math.round(C.lat / step) * step));
@@ -94,6 +118,9 @@ export function createGridLayer(viewer) {
       const lon = w + i * step;
       ds.entities.add({ position: Cesium.Cartesian3.fromDegrees(lon, cLat), label: { ...lab, text: lonText(lon) } });
     }
+    // 線は地面に貼り付けず（clampToGround は作るのが遅く、2D の地図では日付変更線の東側に出なかった）、高さ 0 に引く。
+    //   山などの地形に隠れる所も見えるように、隠れた部分も同じ色で描く（2026-10-25）
+    for (const e of ds.entities.values) if (e.polyline) e.polyline.depthFailMaterial = e.polyline.material;
     ds.entities.resumeEvents();
     viewer.scene.requestRender();
   }
