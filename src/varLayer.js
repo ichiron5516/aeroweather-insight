@@ -9,6 +9,8 @@ export function createVarLayer(viewer) {
   const ds = new Cesium.CustomDataSource('mag-variation');
   viewer.dataSources.add(ds);
   ds.show = false;
+  // main.js の再読込（高度の倍率を変えたときなどの dataSources.removeAll）で消えたら付け直す（2026-10-25。消えたままで表示できなかった）
+  viewer.dataSources.dataSourceRemoved.addEventListener((_, d) => { if (d === ds) setTimeout(() => { if (!viewer.dataSources.contains(ds)) viewer.dataSources.add(ds); }, 0); });
   let on = false, lastKey = '', remove = null, removeTick = null;
   const COL = Cesium.Color.fromCssColorString('#e040fb');
   const box = document.createElement('div');

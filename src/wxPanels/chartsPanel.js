@@ -333,7 +333,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
         <div class="row">
           <div class="side">${sideHtml(i)}</div>
           <div class="main">
-            <div class="th" id="awTh-${i.id}" title="クリックで自動解析と地図への重ね表示">読み込み中…</div>
+            <div class="th" id="awTh-${i.id}" title="押すと地図に重ねる（ほかの図と一緒に重ねられる）。もう一度押すと外す">読み込み中…</div>
             ${ANIM_IDS.includes(i.id) || IMG_ANIM_IDS.includes(i.id) ? `<div class="rp" id="awAnimBar-${i.id}"></div>` : ''}
             <div class="meta"><b>${i.title}</b><span id="awTm-${i.id}"></span></div>
           </div>
@@ -793,6 +793,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     if (i.id === 'typhoon') {                // 台風：経路・予報円・暴風警戒域・強風域を地図に描く
       if (!r.tcs.length) { say('発表中の台風はありません。'); return; }
       sel.layer = { _awTyphoon: drawTyphoon3D(viewer, r.tcs) };
+      window.dispatchEvent(new Event('aw:chartsel'));
       say('地図に描きました（白い破線の円＝予報円、赤い線＝暴風警戒域、赤＝暴風域、黄＝強風域）。');
       let w = 180, e = 0, so = 90, n = -90;
       for (const tc of r.tcs) for (const p of tc.parts) for (const [la, lo] of [p.center, ...(p.track?.typhoon || [])].filter(Boolean)) { w = Math.min(w, lo); e = Math.max(e, lo); so = Math.min(so, la); n = Math.max(n, la); }
@@ -802,17 +803,24 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     const pj = PROJ[i.id]; if (!pj) { say('この図は地図に重ねられません。'); return; }
     const P2 = pj.panels ? pj.panels[sel.level] : pj;
     say(r.pdf ? 'PDF を高解像度で描いています…' : '図を地図の座標に合わせています…');
+    sel.busy = i.id;                          // 読み込み中（この間に別の図を押したら、読み込めた後も地図に残す）
     try {
       const src = await sourceFor(i);
       if (my !== sel.seq) return;
       const warped = warpChart(src, P2, { s: r.pdf ? PDF_SCALE : 1, outW: r.pdf ? 3072 : 2048, style: sel.style });
       const lay = await addChartLayer(viewer, warped, { alpha: sel.alpha });
-      if (my !== sel.seq) { removeChartLayer(viewer, lay); return; }
+      if (my !== sel.seq) {
+        if (pinWant.has(i.id)) { pinWant.delete(i.id); pins.set(i.id, lay); anim.raise(); window.dispatchEvent(new Event('aw:chartsel')); }   // 読み込み中に別の図を押した：この図も地図に残す
+        else removeChartLayer(viewer, lay);
+        return;
+      }
       sel.layer = lay;
       anim.raise();
+      window.dispatchEvent(new Event('aw:chartsel'));   // 重ねている図の一覧（layout.js）を合わせる
       const b = warped.box;
       say(`地図に重ねました（${Math.round(b.s)}〜${Math.round(b.n)}°N・${Math.round(b.w)}〜${Math.round(b.e)}°E の範囲。図の経緯線・海岸線が地図と重なります）。`);
-    } catch (e) { say(`地図に重ねられませんでした（${e.message}）。`); console.warn('[charts overlay]', i.id, e); }
+    } catch (e) { pinWant.delete(i.id); say(`地図に重ねられませんでした（${e.message}）。`); console.warn('[charts overlay]', i.id, e); }
+    finally { if (sel.busy === i.id) sel.busy = null; }
   }
 
   function openGuide(i) {
@@ -869,6 +877,36 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     it.scrollIntoView({ block: 'start', behavior: 'smooth' });
     window.dispatchEvent(new Event('aw:chartsel'));
   }
+  // ---------- 複数の図を重ねる（2026-10-25） ----------
+  //   図（カード）を押すと地図に重ねる。別の図を押すと、前の図は地図に残したまま（解説は閉じる）重ねる。
+  //   重ねている図をもう一度押すと外す。衛星・レーダーは押すたびに重ねる／外す（同じ時刻で再生）
+  //   pins … 地図に残している図、pinWant … 読み込み中に別の図を押したので、読み込めたら残す図
+  const pins = new Map(), pinWant = new Set();
+  function dropLayer(lay) {
+    if (!lay) return;
+    if (lay._awTyphoon) viewer.dataSources.remove(lay._awTyphoon, true);
+    else if (lay._awRadar) { if (!radarBtnOn) hideRadarMap(); }
+    else if (lay._awSat) { if (!btnOn[lay._awSat]) anims[lay._awSat].hideFromMap(); }
+    else if (lay._awTiles) viewer.imageryLayers.remove(lay, true); else removeChartLayer(viewer, lay);
+  }
+  function unpin(id) {
+    const lay = pins.get(id); pins.delete(id); pinWant.delete(id);
+    dropLayer(lay);
+    window.dispatchEvent(new Event('aw:chartsel'));
+  }
+  function pinSel() {
+    if (!sel.id) return;
+    if (sel.layer) { pins.set(sel.id, sel.layer); sel.layer = null; }
+    else if (sel.busy === sel.id) pinWant.add(sel.id);
+    unselect();                                // 解説を閉じる（図は pins に移したので消えない）
+  }
+  function cardClick(i) {
+    if (ANIM_IDS.includes(i.id)) { press(i.id, !isOn(i.id)); window.dispatchEvent(new Event('aw:chartsel')); return; }
+    if (pins.has(i.id) || pinWant.has(i.id)) { unpin(i.id); return; }
+    if (sel.id === i.id) { unselect(); return; }
+    pinSel();
+    select(i);
+  }
   // 右下の「天気図」ボタン（main.js）から使う：図を選んで地図に表示する／もう一度で消す
   window.awCharts = {
     list: items.map(i => ({ id: i.id, title: i.title, grp: i.grp })),
@@ -922,7 +960,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     return out;
   };
   window.dispatchEvent(new Event('aw:charts-ready'));
-  P.querySelectorAll('.th').forEach(th => th.onclick = () => select(items.find(i => i.id === th.closest('.it').dataset.id)));
+  P.querySelectorAll('.th, .it .meta').forEach(th => th.onclick = () => cardClick(items.find(i => i.id === th.closest('.it').dataset.id)));
   // 見方・見どころ（ボタンで開け閉め）
   P.querySelectorAll('[data-how]').forEach(b => b.onclick = () => {
     const i = items.find(x => x.id === b.dataset.how), box = P.querySelector(`#awHw-${i.id}`);
@@ -979,6 +1017,16 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
   // 気象庁のレーダーと海外レーダーを同時に表示できる（2026-10-18）
   window.awCharts.overlay = id => { press(id, !isOn(id)); window.dispatchEvent(new Event('aw:chartsel')); };
   window.awCharts.overlayOn = isOn;
+  // 天気図の引き出しの「重ねている図」（layout.js）から使う
+  window.awCharts.active = () => [...new Set([...pins.keys(), ...(sel.id && sel.layer ? [sel.id] : []), ...ANIM_IDS.filter(id => isOn(id))])];
+  window.awCharts.focused = () => sel.id;
+  window.awCharts.press = id => { const i = items.find(x => x.id === id); if (i) cardClick(i); };
+  window.awCharts.off = id => {
+    if (ANIM_IDS.includes(id)) { if (isOn(id)) press(id, false); if (sel.id === id) unselect(); }
+    else if (pins.has(id) || pinWant.has(id)) unpin(id);
+    else if (sel.id === id) unselect();
+    window.dispatchEvent(new Event('aw:chartsel'));
+  };
   const setCombo = on => combos.forEach(b => { b.setAttribute('aria-pressed', on); b.textContent = on ? '重ねるのをやめる' : '衛星・レーダーを重ねる'; });
   combos.forEach(b => b.onclick = () => {
     const on = b.getAttribute('aria-pressed') !== 'true';
@@ -1211,6 +1259,9 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
   });
 
   viewer.dataSources.dataSourceRemoved.addEventListener((_, d) => {
+    if (d.name === 'typhoon' && pins.get('typhoon')?._awTyphoon === d) {
+      setTimeout(() => { if (pins.has('typhoon') && state.typhoon?.tcs?.length) pins.set('typhoon', { _awTyphoon: drawTyphoon3D(viewer, state.typhoon.tcs) }); }, 0);
+    }
     if (d.name === 'typhoon' && sel.id === 'typhoon' && sel.layer?._awTyphoon === d) {
       setTimeout(() => { if (sel.id === 'typhoon' && state.typhoon?.tcs?.length) sel.layer = { _awTyphoon: drawTyphoon3D(viewer, state.typhoon.tcs) }; }, 0);
     }

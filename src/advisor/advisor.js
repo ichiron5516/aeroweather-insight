@@ -106,6 +106,9 @@ const CSS = `
 #awAdv button.save:disabled{opacity:.45;cursor:default}
 #awAdv button.go{background:#00a152;border-color:#00e676;font-weight:600;padding:6px 14px}
 #awAdv button.tg[aria-pressed="true"]{background:#1e3a5f;border-color:#8fd0ff}
+#awAdv #awSecBtn{flex:1 1 100%;min-height:34px}
+#awAdv #awSecBtn[aria-pressed="true"]{background:#1e3a5f;border-color:#8fd0ff}
+#awAdv #awSecBtn:disabled{opacity:.45;cursor:default}
 #awAdv .x{float:right;background:none;border:none;color:#aaa;font-size:16px;cursor:pointer}
 #awAdv .st{font-size:11px;color:#9fb3c8;display:grid;grid-template-columns:auto 1fr;gap:1px 8px}
 #awAdv .st .ok{color:#69f0ae}#awAdv .st .ng{color:#ff8a80}#awAdv .st .wait{color:#ffd54f}
@@ -272,7 +275,7 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
     </div>
     <h3>気象データ</h3><div class="st" id="awSt"><span>—</span><span>「評価する」で最新データを取得します</span></div>
     <h3>アドバイス</h3><div class="advice" id="awAdvice">出発・到着を選んで「評価する」を押すと、登録経路（AIC標準経路・悪天回避登録経路など）を揺れのリスクで比べ、推奨の経路と高度を表示します。</div>
-    <h3>候補経路 <span class="hint">（クリックで選択・ダブルクリックで3Dと断面図）</span></h3><div id="awGc" style="font-size:12px;color:#cfe3f5;margin:-2px 0 4px"></div><ol id="awList"></ol>
+    <h3>候補経路 <span class="hint">（クリックで選択・ダブルクリックで経路の線だけを3Dで。気象や地点名・断面図は下の「表示」のボタン）</span></h3><div id="awGc" style="font-size:12px;color:#cfe3f5;margin:-2px 0 4px"></div><ol id="awList"></ol>
     <h3>表示</h3>
     <div class="row">
       <button class="tg" data-l="cat" aria-pressed="true">乱気流域</button>
@@ -282,6 +285,7 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
       <button class="tg" data-l="all" aria-pressed="true">全候補</button>
       <button class="tg" data-l="wpt" aria-pressed="true" title="選んだ経路の地点名と通過高度（3Dと断面図）">Waypoint</button>
       <button class="tg" data-l="awy" aria-pressed="true" title="選んだ経路の航空路名・SID・STAR・直行（3Dと断面図）">Airway</button>
+      <button id="awSecBtn" aria-pressed="false" disabled title="選んだ経路の断面図を画面の右下に出す・しまう">断面図</button>
     </div>
     <div class="note">揺れ評価 = 晴天乱気流（Ellrod指数・気象庁MSM/GSM）、対流雲（レーダーエコー・経路左右10NM）、発達した積乱雲（強いエコー×ひまわり赤外の冷たい雲頂。20NM以内で推定雲頂＋5000ftより低いと強）、SIGMET（TS/TURB/MTW）を、通過する時間（分）×強さで合計した値。距離が延びる分も加味して順位付け。教育用の簡易評価であり、実運航の判断には使用できません。</div>`;
   const $ = id => panel.querySelector('#' + id);
@@ -352,6 +356,11 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
   // ---------- 断面図（候補経路のダブルクリックで、画面下の中央に出す） ----------
   //   断面図の「✏ FL変更」で途中の高度を変えると、その計画で揺れ評価を計算し直し、一覧・3D・アドバイスにも反映する
   const section = createRouteSection({ onEdit: pl => applyPlan(pl), onReset: () => resetPlan() });
+  // 断面図ボタン（2026-10-25）：候補経路のダブルクリックでは断面図を出さず（3D だけ）、このボタンで出し入れする
+  const secBtn = $('awSecBtn');
+  function syncSecBtn() { secBtn.setAttribute('aria-pressed', section.open); secBtn.disabled = !S.ranked.length; }
+  secBtn.onclick = () => { if (section.open) section.hide(); else showSection(); syncSecBtn(); };
+  { const secEl = document.getElementById('awSec'); if (secEl) new MutationObserver(syncSecBtn).observe(secEl, { attributes: true, attributeFilter: ['hidden'] }); }
   function applyPlan(pl, manual = true) {
     const r = S.ranked[S.sel]; if (!r) return;
     try {
@@ -522,6 +531,7 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
   }
   const gcText = () => { const g = gcNM(); return g == null ? '' : `大圏距離（${$('awDep').value}→${$('awArr').value}）${Math.round(g).toLocaleString()} NM（${Math.round(g * 1.852).toLocaleString()} km）`; };
   function renderList() {
+    syncSecBtn();
     const g = gcNM();
     $('awGc').textContent = S.ranked.length && g != null ? gcText() + '。各経路の％は大圏距離に対する遠回りの割合' : '';
     // 各経路：距離（NM、SID・STAR を含む全経路）を大きく。経路の文字列・SID・STAR は出さない
@@ -535,7 +545,7 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
       </li>`).join('');
   }
   // 候補をクリック → 選んだ経路の色・太さを変える（視点は変えない）。
-  // ダブルクリック（iPad はダブルタップ）→ 3D（高度を誇張して横から斜めに見る）と、画面下の中央に断面図
+  // ダブルクリック（iPad はダブルタップ）→ 3D（高度を誇張して横から斜めに見る）。断面図は「断面図」ボタンで出す
   let lastTap = { i: -1, t: 0 };
   const selectRoute = i => {
     S.sel = i;
@@ -553,10 +563,18 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
     if (i !== S.sel) selectRoute(i);
     if (dbl) open3D();
   });
+  // ダブルクリックで 3D にしたときは、選んだ経路の線だけを出す（2026-10-25）。
+  //   乱気流域・SIGMET・積乱雲・悪天予想図・全候補・Waypoint・Airway は、パネルの「表示」のボタンで出す
+  function routeOnly() {
+    for (const k of Object.keys(S.layers)) S.layers[k] = false;
+    panel.querySelectorAll('.tg[data-l]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    section.setLayers({ wpt: false, awy: false });
+    render(false);
+  }
   async function open3D() {
     const r = S.ranked[S.sel]; if (!r) return;
-    showSection();
-    await ensureExag();
+    routeOnly();
+    await ensureExag();                       // 断面図はすぐには出さない（「断面図」ボタンで出す。2026-10-25）
     flyRoute3D(r);
   }
   const sectionHead = r => `${$('awDep').value} → ${$('awArr').value}（大圏 ${Math.round(gcNM() ?? 0).toLocaleString()} NM）　${r.cand.label}　${Math.round(r.distanceNM).toLocaleString()} NM・${levelPlanText(r.best)}・揺れ評価 ${r.best.hazardScore}` +
@@ -722,8 +740,9 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
         // 上昇終了（TOC）・降下開始（TOD）
         const firstLv = r.best.fl * 100, lastLv = r.best.steps?.length ? r.best.steps.at(-1).to * 100 : firstLv;
         const toc = prof.findIndex(q => q.alt >= firstLv - 50), tod = prof.findLastIndex(q => q.alt >= lastLv - 50);
+        // TOC・TOD・高度変更の札は「Waypoint」（地点名と通過高度）を出しているときだけ（2026-10-25）
         for (const [i, name] of [[toc, 'TOC'], [tod, 'TOD']]) {
-          if (i < 0) continue;
+          if (i < 0 || !S.layers.wpt) continue;
           const q = prof[i];
           ds.entities.add({ position: Cesium.Cartesian3.fromDegrees(q.lon, q.lat, M(q.alt)),
             point: { pixelSize: 8, color: Cesium.Color.fromCssColorString('#b388ff'), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
@@ -736,7 +755,7 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
         // 航空路名・SID/STAR 名（区間の途中に表示）
         if (S.layers.awy) for (const g of airwayGroups(r.full)) addLegLabels(g, r.best.prof);
         // 高度変更（ステップ上昇・降下）を始める所
-        for (const st of r.best.steps || []) {
+        for (const st of S.layers.wpt ? r.best.steps || [] : []) {
           const up = st.to > st.from;
           ds.entities.add({ position: Cesium.Cartesian3.fromDegrees(st.lon, st.lat, M(st.from * 100)),
             point: { pixelSize: 9, color: Cesium.Color.fromCssColorString(up ? '#40c4ff' : '#ffab40'), outlineColor: Cesium.Color.BLACK, outlineWidth: 1,
@@ -749,7 +768,10 @@ export async function initAdvisor(viewer, { dataBase = `${import.meta.env.BASE_U
             description: `${st.near}付近から FL${st.from} → FL${st.to} へ${up ? '上昇' : '降下'}${st.why ? `（${st.why.label}）` : ''}` });
         }
         // 主な揺れ要因の位置に注記
+        //   その要因の表示（乱気流域・積乱雲・SIGMET・悪天予想図。山は Waypoint）を出しているときだけ（2026-10-25）
+        const HZ_LAYER = { CAT: 'cat', CONV: 'cb', CB: 'cb', SIGMET: 'sigmet', FCST: 'fcst', TERRAIN: 'wpt' };
         for (const h of r.best.hazards.slice(0, 3)) {
+          if (!S.layers[HZ_LAYER[h.type] || 'cat']) continue;
           ds.entities.add({ position: Cesium.Cartesian3.fromDegrees(h.lon, h.lat, M(h.flMax * 100) + 1500),
             label: { text: `${h.type === 'CAT' ? 'CAT' : h.type === 'CONV' ? '雷雨' : h.type === 'CB' ? '積乱雲' : h.type === 'TERRAIN' ? '山' : h.type === 'FCST' ? '悪天予想' : 'SIGMET'} ${{ LGT: '弱', MOD: '並', SEV: '強' }[h.cls]}`,
               font: '600 13px Meiryo', fillColor: Cesium.Color.fromCssColorString(RISK_COL[h.cls]), showBackground: true,

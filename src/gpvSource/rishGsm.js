@@ -25,8 +25,26 @@ const status = detail => { try { window.dispatchEvent(new CustomEvent('aw:gpvsrc
 let runsCache = null;   // { at, runs: [{ init(ms), dir, fds:Set(時間) }] }
 const pad = n => String(n).padStart(2, '0');
 const dayDir = d => `${d.getUTCFullYear()}/${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())}`;
-export async function listRuns() {
-  if (runsCache && Date.now() - runsCache.at < 10 * 60e3) return runsCache.runs;
+// RISH が止まっている・つながらないとき（2026-10-25）：1 回の問い合わせに 20 秒以上かかって 502 になり、
+//   経路アドバイスなどの何百もの問い合わせがそれぞれ 3 日分の一覧を読み直していたため、評価が終わらなくなっていた。
+//   ・一覧の読み込みは 1 つにまとめる（同時に来た問い合わせは同じ結果を待つ）
+//   ・1 回の読み込みは 8 秒で打ち切る
+//   ・読めなかったら 10 分間は RISH を使わず、すぐに Open-Meteo に切り替える（omShim.js）
+let runsPending = null, runsFail = null;
+const FAIL_MS = 10 * 60e3, LIST_TIMEOUT = 8000;
+export function rishDown() { return !!runsFail && Date.now() - runsFail.at < FAIL_MS; }
+export function listRuns() {
+  if (runsCache && Date.now() - runsCache.at < 10 * 60e3) return Promise.resolve(runsCache.runs);
+  if (rishDown()) return Promise.reject(runsFail.err);
+  runsPending ||= listRuns0().then(l => { runsFail = null; return l; }, e => {
+    runsFail = { at: Date.now(), err: e };
+    status({ state: 'down', message: e.message });
+    console.warn('[RISH GSM] 読めないので 10 分間は Open-Meteo を使います：', e.message);
+    throw e;
+  }).finally(() => { runsPending = null; });
+  return runsPending;
+}
+async function listRuns0() {
   const base = rishBase();
   if (!base) throw new Error('RISH の中継がありません');
   const runs = new Map();
@@ -35,10 +53,16 @@ export async function listRuns() {
     const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - k));
     let t;
     try {
-      const r = await fetch(`${base}/${dayDir(d)}/`, { cache: 'no-store' });
+      const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), LIST_TIMEOUT);
+      const r = await fetch(`${base}/${dayDir(d)}/`, { cache: 'no-store', signal: ctl.signal }).finally(() => clearTimeout(tm));
+      if (r.status >= 500) throw new Error(`RISH（または中継）が応答しません（HTTP ${r.status}）`);   // サーバーが止まっている：ほかの日も読めない
       if (!r.ok) continue;
       t = await r.text();
-    } catch { continue; }
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error(`RISH から ${LIST_TIMEOUT / 1000} 秒以内に応答がありません`);
+      if (/^RISH/.test(e.message)) throw e;
+      continue;
+    }
     for (const m of t.matchAll(/Z__C_RJTD_(\d{4})(\d\d)(\d\d)(\d\d)0000_GSM_GPV_Rgl_FD(\d\d)(\d\d)_grib2\.bin/g)) {
       const init = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4]);
       const r = runs.get(init) || runs.set(init, { init, dir: dayDir(new Date(init)), fds: new Set() }).get(init);

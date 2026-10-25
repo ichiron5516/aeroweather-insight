@@ -25,6 +25,7 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
   infoBox: false,
   selectionIndicator: true,
   baseLayerPicker: false,   // 右上の地図（レイヤ）切替ボタンは使わない
+  homeButton: false,        // 右上の家のボタン（地球全体）は使わない。「全体」は地図上部の「視点」で選ぶ（2026-10-25）
 });
 window.viewer = viewer;   // 開発用：Consoleからカメラ位置を取得するため
 // 地図の記号をダブルクリック（iPad はダブルタップ）しても、その記号に視点を固定しない（2026-10-19）
@@ -804,7 +805,7 @@ function presetView(p) {
 //   ボタンは layout.js が「設定」の引き出しに移すので、#camButtons の中に限らずに探す（2026-10-19）
 //   距離は今の距離をおおむね保つ。横から見るときは、誇張した高さ（最大で約1,000km）が入るよう少し見下ろす
 {
-  const VIEWS = { top: [0, -90], n: [180, -12], e: [270, -12], w: [90, -12], s: [0, -12], se: [315, -35] };
+  const VIEWS = { top: [0, -90], n: [180, -12], e: [270, -12], w: [90, -12], s: [0, -12], se: [315, -35], sw: [45, -35], ne: [225, -35], nw: [135, -35] };   // 斜め 4 方向（2026-10-25 に北西・北東・南西を追加）
   document.querySelectorAll('button[data-view]').forEach(btn => btn.onclick = () => {
     const [h, p] = VIEWS[btn.dataset.view];
     releaseCamera();

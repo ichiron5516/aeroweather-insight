@@ -68,15 +68,36 @@ export async function initAirportsLayer(viewer, { dataUrl = null } = {}) {
   const countryOf = id => SPECIAL[id] || COUNTRY[id.slice(0, 2)] || (id[0] === 'Z' ? '中国' : id[0] === 'U' ? 'ロシア' : id[0] === 'Y' ? 'オーストラリア' : '');
   const stations = new Map();
   // 表示する・しない（「表示」の引き出しの「青丸空港」「白丸空港」。2026-10-19）。事例表示で隠す空港（caseHide）も合わせて決める
-  const vis = { dbAirport: true, wxStation: true };
+  const vis = { dbAirport: true, wxStation: false };   // 最初は青丸空港だけ（白丸は「地図の線」で出す。2026-10-25）
   let caseHide = null;
   const kindOn = k => (k === 'dbRunway' ? vis.dbAirport : vis[k] !== false);
+  // 地球の裏側（地平線の向こう）にある空港は出さない（2026-10-25）
+  //   丸と名前は地形や雲に隠れないように「いつも手前に描く」設定（disableDepthTestDistance）なので、地球全体を見ているときに
+  //   裏側の空港まで地球を透かして表側に描かれ、位置がずれて見えていた。3D のときだけ、カメラから見えるかどうかで決める
+  const scratch = new Cesium.Cartesian3();
   function refreshShow() {
+    const occ = viewer.scene.mode === Cesium.SceneMode.SCENE3D ? new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, viewer.camera.positionWC) : null;
+    const t = viewer.clock.currentTime;
     for (const e of ds.entities.values) {
       const k = e.properties?.kind?.getValue?.(), icao = e.properties?.icao?.getValue?.();
       if (!k) continue;
-      e.show = kindOn(k) && !(caseHide && icao && caseHide.includes(icao));
+      let show = kindOn(k) && !(caseHide && icao && caseHide.includes(icao));
+      if (show && occ && k !== 'dbRunway') { const p = e.position?.getValue(t, scratch); if (p && !occ.isPointVisible(p)) show = false; }
+      if (e.show !== show) e.show = show;
     }
+  }
+  // カメラが動いたら（0.15 秒ごとまで）、見える空港を決め直す
+  {
+    let last = null, lastMode = null, lastT = 0, dirty = true;
+    ds.entities.collectionChanged.addEventListener(() => { dirty = true; });
+    viewer.scene.preRender.addEventListener(() => {
+      const now = performance.now(); if (now - lastT < 150) return;
+      const c = viewer.camera.positionWC, mode = viewer.scene.mode;
+      const moved = !last || Cesium.Cartesian3.distance(c, last) > Math.max(2000, viewer.camera.positionCartographic.height * 0.005);
+      if (!dirty && !moved && mode === lastMode) return;
+      lastT = now; dirty = false; lastMode = mode; last = Cesium.Cartesian3.clone(c, last);
+      refreshShow();
+    });
   }
   async function loadStations() {
     const KEY = 'aw.wxStations.v5', DAYS = 30;          // v5：範囲を地球のふち（衛星の真下から 81 度）まで広げた（前の一覧は使わない）
