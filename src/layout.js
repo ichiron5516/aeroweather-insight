@@ -313,15 +313,21 @@ export function initLayout() {
         }
         world = now;
       });
-      // 地球儀のボタンで 2D の地図・2.5D（Columbus）に切り替えたときは、日本の側を真ん中に、西はイギリス・アイルランド（西経10度）から
-      //   東はブラジルの東端（西経35度）までが余白つきで入る範囲にする（2026-10-25）。日付変更線をまたぐので west > east の四角。
-      //   両方を入れると東西 348 度になり、真ん中は東経156度（日本は真ん中より少し左）
-      const WORLD_RECT = C.Rectangle.fromDegrees(-18, -58, -30, 74);   // 端に少し余白
+      // 右上の地図の切り替え（2.5D・3D・2D）のどれを押しても、日本（東経137度）を真ん中にして世界全体を出す（2026-10-25）
+      //   2D は地球 1 周（360 度）がちょうど横に入る大きさ。イギリスは左寄り、ブラジルの東端は左端（日付変更線の反対側で地図がつながる）
+      //   2.5D（Columbus）は地図が日付変更線で切れるので世界全体（日本は右寄り）、3D は日本を真上から見た地球全体
+      const WORLD_M = 2 * Math.PI * 6378137;
       v.scene.morphComplete.addEventListener(() => {
-        if (v.scene.mode === C.SceneMode.SCENE3D) return;
         world = true;
         if (S.apt.dbAirport) setApt('dbAirport');
-        v.camera.setView({ destination: WORLD_RECT });
+        const mode = v.scene.mode, down = { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 };
+        if (mode === C.SceneMode.SCENE3D) { v.camera.setView({ destination: C.Cartesian3.fromDegrees(137, 30, 2.0e7), orientation: down }); return; }
+        if (mode === C.SceneMode.SCENE2D) { v.camera.setView({ destination: C.Cartesian3.fromDegrees(137, 12, WORLD_M) }); return; }
+        const f = v.camera.frustum, asp = (v.canvas.clientWidth || 1) / (v.canvas.clientHeight || 1);
+        const fovx = asp >= 1 ? f.fov : 2 * Math.atan(Math.tan(f.fov / 2) * asp);
+        // 2.5D の地図は日付変更線で切れて（2D のようにつながらない）、日本を真ん中にすると右半分が空になるため、
+        //   2.5D だけは世界全体（東経0度が真ん中）を出す。日本は真ん中より右になる
+        v.camera.setView({ destination: C.Cartesian3.fromDegrees(0, 12, WORLD_M / 2 / Math.tan(fovx / 2) * 1.04), orientation: down });
       });
     };
     watch();
