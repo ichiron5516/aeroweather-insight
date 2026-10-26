@@ -658,7 +658,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
         try { th.replaceChildren(await renderPdf(r.pdf, 0.6, { wet: PAINT_CHARTS && i.id === 'aupq78' })); } catch { th.textContent = 'PDF（クリックで表示）'; }
         if (r.frames?.length) imgAnim(i, r, null, { pdf: true });
       } else if (r.sigwx) {
-        th.replaceChildren(await sigwxCanvas(r.d, { irTiles: r.irTiles, airports }));
+        th.replaceChildren(await sigwxCanvas(r.d, { w: 1000 }));
       } else if (r.typhoon) {
         if (r.tcs.length) th.replaceChildren(await typhoonCanvas(r.tcs, { irTiles: r.irTiles, airports }));
         else th.textContent = '現在、発表中の台風はありません';
@@ -741,7 +741,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     else if (r.intl) { link.href = 'https://www.rainviewer.com/map.html'; B.replaceChildren(await composeIntl(r.tiles, 4)); }
     else if (r.tiles) { link.href = r.tiles.replace('{z}/{x}/{y}', '4/14/6'); B.replaceChildren(await composeTiles(r.tiles, Math.min(6, r.maxLevel || 6), airports)); }
     else if (r.typhoon) { B.replaceChildren(await typhoonCanvas(r.tcs, { irTiles: r.irTiles, airports, z: 5 })); link.href = 'https://www.jma.go.jp/bosai/map.html#contents=typhoon'; }
-    else if (r.sigwx) { B.replaceChildren(await sigwxCanvas(r.d, { irTiles: r.irTiles, airports, z: 4 })); link.href = 'https://aviationweather.gov/sigwx'; }
+    else if (r.sigwx) { B.replaceChildren(await sigwxCanvas(r.d, { w: 2000 })); link.href = 'https://aviationweather.gov/sigwx'; }
     else if (r.colored) { link.href = r.pdf || r.src; B.replaceChildren(r.colored); }
     else if (r.pdf) {
       link.href = r.pdf;

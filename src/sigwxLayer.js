@@ -126,72 +126,111 @@ export async function fetchSigwxFor(time = new Date()) {
     const trop = (d.TROP || []).filter(f => f.geometry?.type === 'LineString' && fl(f.properties?.height))
       .map(f => ({ pts: ll(f.geometry.coordinates), fl: fl(f.properties.height) }));
     const valid = new Date(issue.getTime() + step * 3600e3);
-    return { issue, step, valid, areas, jets, trop };
+    // 台風・火山（点）
+    const points = ['TC', 'VOLC'].flatMap(kind => (d[kind] || []).filter(f => f.geometry?.type === 'Point')
+      .map(f => ({ kind, name: f.properties?.name || '', lon: +f.geometry.coordinates[0], lat: +f.geometry.coordinates[1] })));
+    return { issue, step, valid, areas, jets, trop, points };
   }
   throw lastErr || new Error('国際悪天予想図を取得できません');
 }
 
-// ---------- 天気図の一覧（chartsPanel.js）の見本と自動解析（2026-10-26） ----------
-//   見本：東アジア〜西太平洋（90〜170°E・0〜55°N）を Web メルカトルで。背景は国土地理院の標準地図（暗くして、色の区域を見やすく）
-const TH = { w: 90, e: 170, s: 0, n: 55 };
-const lon2x = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
-const lat2y = (lat, z) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 256 * 2 ** z; };
+// ---------- 天気図の一覧（chartsPanel.js）の図と自動解析（2026-10-26） ----------
+//   aviationweather.gov の WAFS SigWx の図と同じ見た目で描く：白地に海岸線・国境、緑の矢印＝ジェット気流（FL）、
+//   赤の線＝積乱雲、青の破線＝圏界面の高さ（FL）、橙・水色の面＝乱気流・着氷、赤い記号＝台風、黒い三角＝火山
+//   範囲は全球（150°E を真ん中に。日本が左寄りの中央に来る）。メルカトルで 65°S〜75°N
 /** 経度を 0〜360 に寄せる（区域・線ごとにまとめてずらす。日付変更線をまたいでも切れない） */
 const to360 = pts => { if (!pts.length) return pts; const c = pts.reduce((a, p) => a + p.lon, 0) / pts.length, k = Math.round((180 - c) / 360) * 360; return pts.map(p => ({ lat: p.lat, lon: p.lon + k })); };
-const GSI_STD = 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png';
-export async function sigwxCanvas(d, { irTiles = null, airports = [], z = 3, base = GSI_STD } = {}) {
-  const { w, e, s, n } = TH, X0 = lon2x(w, z), X1 = lon2x(e, z), Y0 = lat2y(n, z), Y1 = lat2y(s, z);
-  const cv = document.createElement('canvas'); cv.width = Math.round(X1 - X0); cv.height = Math.round(Y1 - Y0);
-  const g = cv.getContext('2d');
-  g.fillStyle = '#0b141e'; g.fillRect(0, 0, cv.width, cv.height);
-  // 背景の地図（海岸線が分かるように）。取れなければ紺一色
-  let based = false;
-  if (base) {
-    const jobs = [];
-    for (let tx = Math.floor(X0 / 256); tx <= Math.floor(X1 / 256); tx++) for (let ty = Math.floor(Y0 / 256); ty <= Math.floor(Y1 / 256); ty++)
-      jobs.push(new Promise(ok => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { g.drawImage(im, tx * 256 - X0, ty * 256 - Y0); based = true; ok(); }; im.onerror = ok; im.src = base.replace('{z}', z).replace('{x}', tx).replace('{y}', ty); }));
-    await Promise.all(jobs);
-    if (based) { g.fillStyle = 'rgba(10,22,36,0.62)'; g.fillRect(0, 0, cv.width, cv.height); }
+let WORLD = null;                                   // 海岸線・国境（public/data/world50m_lines.json、Natural Earth 1:50m）
+const world = () => (WORLD ||= fetch(`${String(import.meta.env?.BASE_URL || '/').replace(/\/?$/, '/')}data/world50m_lines.json`).then(r => (r.ok ? r.json() : null)).catch(() => null));
+const C0 = 150;                                     // 図の真ん中の経度
+const LAT_N = 75, LAT_S = -65;
+const merc = la => Math.log(Math.tan(Math.PI / 4 + la * Math.PI / 360));
+export async function sigwxCanvas(d, { w = 1400 } = {}) {
+  const W = Math.round(w), k = W / 360, yN = merc(LAT_N) * 180 / Math.PI, yS = merc(LAT_S) * 180 / Math.PI, H = Math.round((yN - yS) * k);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), u = Math.max(1, W / 1000);       // 線の太さ・文字の大きさの基準
+  const X = lon => (((lon - (C0 - 180)) % 360) + 360) % 360 * k;  // 0〜W
+  const Y = lat => (yN - merc(Math.max(-85, Math.min(85, lat))) * 180 / Math.PI) * k;
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  // 線・面は経度を連続にしたまま描き、左右に 1 周ずらした複製も描く（図の端で切れないように）
+  const draw = (pts, close, fn) => {
+    if (pts.length < 2) return;
+    const x0 = X(pts[0].lon), base = pts[0].lon;
+    for (const off of [-W, 0, W]) {
+      g.beginPath();
+      pts.forEach((p, i) => { const x = x0 + (p.lon - base) * k + off, y = Y(p.lat); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+      if (close) g.closePath();
+      fn();
+    }
+  };
+  const L = pts => to360(pts);
+  // 乱気流・着氷（面）
+  for (const a of d.areas.filter(x => x.kind === 'ICING')) draw(L(a.ring), true, () => { g.fillStyle = a.sev === 'severe' ? 'rgba(100,170,240,.45)' : 'rgba(150,215,250,.40)'; g.fill(); });
+  for (const a of d.areas.filter(x => x.kind === 'TURB')) draw(L(a.ring), true, () => { g.fillStyle = a.sev === 'severe' ? 'rgba(250,140,90,.50)' : 'rgba(255,200,130,.45)'; g.fill(); });
+  // 海岸線・国境
+  const wd = await world();
+  if (wd) {
+    const lines = (arr, col, lw) => {
+      g.strokeStyle = col; g.lineWidth = lw;
+      for (const a of arr) {
+        const pts = []; for (let i = 0; i < a.length; i += 2) pts.push({ lon: a[i] / 10, lat: a[i + 1] / 10 });
+        // 線を図の経度（C0±180）に合わせて、つながりを保ったまま描く
+        let seg = [];
+        const flush = () => { if (seg.length > 1) draw(seg, false, () => g.stroke()); seg = []; };
+        for (const p of pts) { if (seg.length && Math.abs(p.lon - seg.at(-1).lon) > 180) flush(); seg.push(p); }
+        flush();
+      }
+    };
+    lines(wd.border, 'rgba(120,120,120,.55)', 0.6 * u);
+    lines(wd.coast, '#333', 0.8 * u);
   }
-  if (irTiles) {
-    const jobs = [];
-    for (let tx = Math.floor(X0 / 256); tx <= Math.floor(X1 / 256); tx++) for (let ty = Math.floor(Y0 / 256); ty <= Math.floor(Y1 / 256); ty++)
-      jobs.push(new Promise(ok => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { g.globalAlpha = 0.55; g.drawImage(im, tx * 256 - X0, ty * 256 - Y0); g.globalAlpha = 1; ok(); }; im.onerror = ok; im.src = irTiles.replace('{z}', z).replace('{x}', tx).replace('{y}', ty); }));
-    await Promise.all(jobs);
+  // 圏界面（青の破線と FL）
+  g.font = `${Math.round(11 * u)}px Arial, sans-serif`; g.textBaseline = 'middle';
+  const label = (x, y, t, col = '#111') => { g.lineWidth = 3 * u; g.strokeStyle = 'rgba(255,255,255,.9)'; g.strokeText(t, x, y); g.fillStyle = col; g.fillText(t, x, y); };
+  for (const t of d.trop) {
+    const pts = L(t.pts);
+    draw(pts, false, () => { g.setLineDash([5 * u, 4 * u]); g.strokeStyle = '#6a74d8'; g.lineWidth = 1 * u; g.stroke(); g.setLineDash([]); });
+    const m = pts[pts.length >> 1]; label(X(m.lon) + 3, Y(m.lat), `FL${t.fl}`);
   }
-  const P = p => [lon2x(p.lon, z) - X0, lat2y(Math.max(-80, Math.min(80, p.lat)), z) - Y0];
-  const path = (pts, close) => { g.beginPath(); pts.forEach((p, k) => { const [x, y] = P(p); k ? g.lineTo(x, y) : g.moveTo(x, y); }); if (close) g.closePath(); };
-  // 経緯線（10°ごと）
-  g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1;
-  for (let lo = w; lo <= e; lo += 10) { const x = lon2x(lo, z) - X0; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, cv.height); g.stroke(); }
-  for (let la = s; la <= n; la += 10) { const y = lat2y(la, z) - Y0; g.beginPath(); g.moveTo(0, y); g.lineTo(cv.width, y); g.stroke(); }
-  // 区域：着氷 → 乱気流 → 積乱雲 の順に重ねる
-  const order = { ICING: 0, TURB: 1, CB: 2 };
-  for (const a of [...d.areas].sort((p, q) => order[p.kind] - order[q.kind])) {
-    const col = a.kind === 'CB' ? COL.CB : COL[a.kind + (a.sev === 'severe' ? 'severe' : 'moderate')];
-    path(to360(a.ring), true);
-    g.fillStyle = col + (a.kind === 'CB' ? '40' : '2a'); g.fill();
-    g.setLineDash(a.kind === 'CB' ? [] : [5, 3]); g.strokeStyle = col; g.lineWidth = a.kind === 'CB' ? 1.6 : 1.3; g.stroke(); g.setLineDash([]);
-  }
-  // 圏界面（細い黄色）・ジェット気流（太い紫）
-  for (const t of d.trop) { path(to360(t.pts)); g.strokeStyle = COL.TROP + '99'; g.lineWidth = 1; g.stroke(); }
-  for (const j of d.jets) { path(to360(j.pts)); g.strokeStyle = COL.JET; g.lineWidth = 3; g.stroke(); }
-  // 文字（積乱雲の雲頂・ジェットの最大風速）
-  g.font = '600 10px Meiryo, sans-serif';
-  const txt = (x, y, t, c) => { g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(t, x, y); g.fillStyle = c; g.fillText(t, x, y); };
-  for (const a of d.areas.filter(x => x.kind === 'CB')) {
-    const r = to360(a.ring), c = { lat: r.reduce((q, p) => q + p.lat, 0) / r.length, lon: r.reduce((q, p) => q + p.lon, 0) / r.length };
-    const [x, y] = P(c); if (x > 0 && y > 0 && x < cv.width && y < cv.height) txt(x - 12, y + 3, `CB${String(a.top).padStart(3, '0')}`, '#ffd0d0');
-  }
+  // 積乱雲（赤の線）
+  for (const a of d.areas.filter(x => x.kind === 'CB')) draw(L(a.ring), true, () => { g.strokeStyle = '#e00000'; g.lineWidth = 2 * u; g.stroke(); });
+  // ジェット気流（緑の線と、終わりの矢じり）。高さ（FL）は矢羽の点に
   for (const j of d.jets) {
-    const q = j.fl.reduce((b, v) => (!b || v.kt > b.kt ? v : b), null); if (!q) continue;
-    const [x, y] = P(to360([{ lat: q.lat, lon: q.lon }])[0]); if (x > 0 && y > 0 && x < cv.width && y < cv.height) txt(x + 4, y - 4, `${q.kt}kt FL${q.fl}`, '#f3dcff');
+    const pts = L(j.pts); if (pts.length < 2) continue;
+    draw(pts, false, () => { g.strokeStyle = '#139a13'; g.lineWidth = 3 * u; g.lineJoin = 'round'; g.stroke(); });
+    const a = pts.at(-2), b = pts.at(-1), xb = X(b.lon), yb = Y(b.lat), xa = xb - (b.lon - a.lon) * k, ya = Y(a.lat);
+    const ang = Math.atan2(yb - ya, xb - xa), s2 = 9 * u;
+    for (const off of [-W, 0, W]) {
+      g.beginPath(); g.moveTo(xb + off, yb);
+      g.lineTo(xb + off - s2 * Math.cos(ang - 0.45), yb - s2 * Math.sin(ang - 0.45)); g.lineTo(xb + off - s2 * Math.cos(ang + 0.45), yb - s2 * Math.sin(ang + 0.45));
+      g.closePath(); g.fillStyle = '#139a13'; g.fill();
+    }
+    for (const q of j.fl) label(X(q.lon) + 4, Y(q.lat) - 8 * u, `FL${q.fl}`);
   }
-  for (const ap of airports) {
-    const [x, y] = P(ap); if (x < 0 || y < 0 || x > cv.width || y > cv.height) continue;
-    g.fillStyle = '#4fc3f7'; g.beginPath(); g.arc(x, y, 1.8, 0, 7); g.fill();
+  // 台風（赤い記号と名前）・火山（黒い三角）
+  for (const p of d.points || []) {
+    const x = X(p.lon), y = Y(p.lat);
+    if (p.kind === 'TC') {
+      g.strokeStyle = '#e00000'; g.fillStyle = '#e00000'; g.lineWidth = 2 * u;
+      g.beginPath(); g.arc(x, y, 5 * u, 0, 7); g.fill();
+      g.beginPath(); g.arc(x + 4 * u, y - 6 * u, 6 * u, Math.PI * 0.9, Math.PI * 1.6); g.stroke();
+      g.beginPath(); g.arc(x - 4 * u, y + 6 * u, 6 * u, Math.PI * 1.9, Math.PI * 2.6); g.stroke();
+      if (p.name) label(x + 9 * u, y, p.name[0] + p.name.slice(1).toLowerCase(), '#111');
+    } else if (p.kind === 'VOLC') {
+      g.fillStyle = '#111'; g.beginPath(); g.moveTo(x, y - 7 * u); g.lineTo(x + 6 * u, y + 4 * u); g.lineTo(x - 6 * u, y + 4 * u); g.closePath(); g.fill();
+    }
   }
-  if (based) { g.font = '9px Meiryo, sans-serif'; txt(cv.width - 118, cv.height - 5, '背景：国土地理院 標準地図', '#9fb3c8'); }
+  // 題名と時刻
+  const vt = d.valid, p2u = n => String(n).padStart(2, '0'), DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  g.textBaseline = 'alphabetic';
+  g.font = `700 ${Math.round(30 * u)}px Arial, sans-serif`; label(8 * u, 34 * u, 'WAFS SigWx');
+  g.font = `${Math.round(14 * u)}px Arial, sans-serif`; label(9 * u, 54 * u, 'Significant Weather Chart（FL100〜FL450）');
+  g.font = `700 ${Math.round(18 * u)}px Arial, sans-serif`;
+  const tt = `${p2u(vt.getUTCHours())}00UTC ${DOW[vt.getUTCDay()]} ${vt.getUTCDate()} ${MON[vt.getUTCMonth()]} ${vt.getUTCFullYear()}（T+${d.step}h）`;
+  label(W / 2 - g.measureText(tt).width / 2, H - 10 * u, tt, '#333');
+  g.font = `${Math.round(10 * u)}px Arial, sans-serif`;
+  const cr = '出典：WAFS SigWx（NOAA AWC）・海岸線 Natural Earth';
+  label(W - g.measureText(cr).width - 6 * u, H - 8 * u, cr, '#555');
   return cv;
 }
 /** 自動解析：日本付近（120〜155°E・20〜50°N）にかかる積乱雲・乱気流・着氷・ジェット気流 */
