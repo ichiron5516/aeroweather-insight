@@ -34,6 +34,7 @@ import { createSatLift } from './satLift3D.js';
 import { analyzeSatMotion, satMotionShort, drawSatMotion, clearSatMotion } from './satMotion.js';
 import { intlFrames, composeIntl, IntlRadarImageryProvider, intlText, INTL_GUIDE, INTL_RECT, analyzeIntlMotion, intlMotionShort, drawIntlMotion, clearIntlMotion } from './intlRadar.js';
 import { fetchTyphoons, typhoonCanvas, drawTyphoon3D, typhoonText } from './typhoon.js';
+import { fetchSigwxFor, sigwxCanvas, sigwxText } from '../sigwxLayer.js';
 GUIDES.radarIntl = INTL_GUIDE;
 const SECTION_TITLE = Object.fromEntries(Object.entries(SECTION_INFO).map(([k, v]) => [k, v.panels]));
 
@@ -271,6 +272,13 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
         time: tcs.length ? `${iss ? `${iss.getMonth() + 1}/${iss.getDate()} ${String(iss.getHours()).padStart(2, '0')}:${String(iss.getMinutes()).padStart(2, '0')} 発表（日本時間）` : ''}` : '発表中の台風なし' };
     } },
     { grp: '航空', id: 'fbjp', title: '国内悪天予想図（FBJP）', get: async () => ({ src: `https://www.data.jma.go.jp/airinfo/data/pict/fbjp/fbjp.png?t=${Date.now()}`, time: '最新' }) },
+    // 国際悪天予想図（WAFS SIGWX）：画像ではなく GeoJSON。見本は区域・線から描き、地図に重ねる・3D は sigwxLayer.js のパネルで（2026-10-26）
+    { grp: '航空', id: 'sigwx', title: '国際悪天予想図（WAFS SIGWX）', get: async () => {
+      const d = await fetchSigwxFor(new Date());
+      const j = new Date(d.valid.getTime() + 9 * 3600e3);
+      return { sigwx: true, d, irTiles: null,
+        time: `${j.getUTCMonth() + 1}/${j.getUTCDate()} ${String(j.getUTCHours()).padStart(2, '0')}:00 の予想（日本時間・T+${d.step}h）` };
+    } },
     { grp: '衛星・レーダー', id: 'vis', title: '衛星 可視画像', overlay: true, get: async () => {
       const frames = await satFrames('B03/ALBD'), t = frames.at(-1);
       return { tiles: t.tiles, time: fmtJ(t.time) + '（夜間は暗くなります）', maxLevel: 5, frames };
@@ -310,6 +318,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
       if (i.id === 'axjp') b.push('<button data-xsside="axjp" data-north="left" title="元の図と同じ向き（北が左）。図の文字が読める">真横から（北が左）</button>');
     }
     if (i.id === 'fbjp') b.push('<button data-fb3d aria-pressed="false" title="ジェット気流・CAT・揺れのある雲を、読み取った高さで立体表示">3Dで表示</button>');
+    if (i.id === 'sigwx') b.push('<button data-swm="map" aria-pressed="false" title="積乱雲・乱気流・着氷の区域とジェット気流・圏界面を地図に重ねる（6〜48時間先を再生できる）">地図に重ねる</button><button data-swm="3d" aria-pressed="false" title="下限〜上限の高さで立体表示（高度の倍率に合わせる）">3Dで表示</button>');
     if (b.length) b.push('<div class="sep"></div>');
     b.push(`<button data-how="${i.id}" aria-pressed="false" title="この図の見方と、航空での見どころ">見方・見どころ</button>`);
     b.push(`<button data-zoomi="${i.id}" title="大きく表示">拡大</button>`);
@@ -323,6 +332,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     if (i.id === 'vis' || i.id === 'ir') h += '<div class="mv" data-satmv></div>';
     if (i.section) h += `<div class="mv" id="awXsCol-${i.id}" style="font-size:11px"></div><div class="mv" id="awXs3dSt-${i.id}"></div>`;
     if (i.id === 'fbjp') h += '<div class="mv" id="awFb3dSt"></div>';
+    if (i.id === 'sigwx') h += '<div id="awSwSlot"></div>';             // 地図に重ねている間、時刻・要素の操作（sigwxLayer.js のパネル）をここに入れる
     // 雲・エコーの3D表示（雲頂の高さで3D・エコーを3D）はやめた。雲の3Dは悪天予想図（FBJP）の「3Dで表示」だけ
     return h;
   }
@@ -647,6 +657,8 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
       } else if (r.pdf) {
         try { th.replaceChildren(await renderPdf(r.pdf, 0.6, { wet: PAINT_CHARTS && i.id === 'aupq78' })); } catch { th.textContent = 'PDF（クリックで表示）'; }
         if (r.frames?.length) imgAnim(i, r, null, { pdf: true });
+      } else if (r.sigwx) {
+        th.replaceChildren(await sigwxCanvas(r.d, { irTiles: r.irTiles, airports }));
       } else if (r.typhoon) {
         if (r.tcs.length) th.replaceChildren(await typhoonCanvas(r.tcs, { irTiles: r.irTiles, airports }));
         else th.textContent = '現在、発表中の台風はありません';
@@ -712,7 +724,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     box.querySelectorAll('[data-motion]').forEach(fillMotion);
     box.querySelectorAll('[data-intl-motion]').forEach(fillIntlMotion);
     box.querySelectorAll('[data-sat-motion]').forEach(fillSatMotion);
-    (i.id === 'typhoon' ? Promise.resolve(typhoonText(r.tcs || [], airports)) : i.id === 'radarIntl' ? (r.tiles ? intlText(r.tiles, r.time) : Promise.resolve(['海外レーダーを取得できませんでした。'])) : analyze(i.id, { tilesCanvas: i.id === 'radar' ? radarCanvas : tilesCanvas, radarCanvas, init: r.init }))
+    (i.id === 'sigwx' ? Promise.resolve(r.d ? sigwxText(r.d) : ['国際悪天予想図を取得できませんでした。']) : i.id === 'typhoon' ? Promise.resolve(typhoonText(r.tcs || [], airports)) : i.id === 'radarIntl' ? (r.tiles ? intlText(r.tiles, r.time) : Promise.resolve(['海外レーダーを取得できませんでした。'])) : analyze(i.id, { tilesCanvas: i.id === 'radar' ? radarCanvas : tilesCanvas, radarCanvas, init: r.init }))
       .then(lines => put(lines.length ? lines : ['自動解析の対象外です。']))
       .catch(e => put([`自動解析できませんでした（${e.message}）。`]));
   }
@@ -729,6 +741,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     else if (r.intl) { link.href = 'https://www.rainviewer.com/map.html'; B.replaceChildren(await composeIntl(r.tiles, 4)); }
     else if (r.tiles) { link.href = r.tiles.replace('{z}/{x}/{y}', '4/14/6'); B.replaceChildren(await composeTiles(r.tiles, Math.min(6, r.maxLevel || 6), airports)); }
     else if (r.typhoon) { B.replaceChildren(await typhoonCanvas(r.tcs, { irTiles: r.irTiles, airports, z: 5 })); link.href = 'https://www.jma.go.jp/bosai/map.html#contents=typhoon'; }
+    else if (r.sigwx) { B.replaceChildren(await sigwxCanvas(r.d, { irTiles: r.irTiles, airports, z: 4 })); link.href = 'https://aviationweather.gov/sigwx'; }
     else if (r.colored) { link.href = r.pdf || r.src; B.replaceChildren(r.colored); }
     else if (r.pdf) {
       link.href = r.pdf;
@@ -901,6 +914,7 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
     unselect();                                // 解説を閉じる（図は pins に移したので消えない）
   }
   function cardClick(i) {
+    if (i.id === 'sigwx') { swToggle('map'); return; }
     if (ANIM_IDS.includes(i.id)) { press(i.id, !isOn(i.id)); window.dispatchEvent(new Event('aw:chartsel')); return; }
     if (pins.has(i.id) || pinWant.has(i.id)) { unpin(i.id); return; }
     if (sel.id === i.id) { unselect(); return; }
@@ -1018,10 +1032,11 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
   window.awCharts.overlay = id => { press(id, !isOn(id)); window.dispatchEvent(new Event('aw:chartsel')); };
   window.awCharts.overlayOn = isOn;
   // 天気図の引き出しの「重ねている図」（layout.js）から使う
-  window.awCharts.active = () => [...new Set([...pins.keys(), ...(sel.id && sel.layer ? [sel.id] : []), ...ANIM_IDS.filter(id => isOn(id))])];
+  window.awCharts.active = () => [...new Set([...pins.keys(), ...(sel.id && sel.layer ? [sel.id] : []), ...ANIM_IDS.filter(id => isOn(id)), ...(window.awSigwx?.on ? ['sigwx'] : [])])];
   window.awCharts.focused = () => sel.id;
   window.awCharts.press = id => { const i = items.find(x => x.id === id); if (i) cardClick(i); };
   window.awCharts.off = id => {
+    if (id === 'sigwx') { window.awSigwx?.setVisible(false); return; }
     if (ANIM_IDS.includes(id)) { if (isOn(id)) press(id, false); if (sel.id === id) unselect(); }
     else if (pins.has(id) || pinWant.has(id)) unpin(id);
     else if (sel.id === id) unselect();
@@ -1093,6 +1108,28 @@ export function initChartsPanel(viewer, { airports = [] } = {}) {
         { offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-22), 3600000), duration: 2 });
     } else fb3d.hide();
   };
+
+  // ---- 国際悪天予想図（WAFS SIGWX）：地図に重ねる／3D。操作のパネル（sigwxLayer.js）は一覧のカードの中に入れる（2026-10-26） ----
+  //   地図上部の「高度」の「国際悪天3D」から開いたときも、同じくカードの中に入れる
+  async function swToggle(m) {
+    const S = window.awSigwx; if (!S) return;
+    S.dock(P.querySelector('#awSwSlot'));
+    if (S.on && S.mode === m) { await S.setVisible(false); return; }
+    if (!S.on) await S.setVisible(true);
+    await S.setMode(m);
+  }
+  P.querySelectorAll('[data-swm]').forEach(b => b.onclick = () => swToggle(b.dataset.swm));
+  const swSync = () => {
+    const S = window.awSigwx; if (!S) return;
+    if (S.on) S.dock(P.querySelector('#awSwSlot'));
+    P.querySelectorAll('[data-swm]').forEach(b => {
+      const on = S.on && S.mode === b.dataset.swm;
+      b.setAttribute('aria-pressed', on);
+      b.textContent = b.dataset.swm === 'map' ? (on ? '地図から外す' : '地図に重ねる') : (on ? '3Dを消す' : '3Dで表示');
+    });
+    window.dispatchEvent(new Event('aw:chartsel'));
+  };
+  window.addEventListener('aw:sigwx', () => setTimeout(swSync, 0));
 
   // 高層天気図の気圧面を 3D（等高線を読み取って、波打つ面と矢羽根に）。操作は画面右下の「高層3D」の列のボタンで行う
   initUpper3DButtons();

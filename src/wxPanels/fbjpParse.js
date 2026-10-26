@@ -192,16 +192,22 @@ function mergeAcrossFront(parts, grayMask, W) {
     return out;
   });
   const par = parts.map((_, i) => i), f = i => (par[i] === i ? i : (par[i] = f(par[i])));
-  for (let a = 0; a < parts.length; a++) for (let b = a + 1; b < parts.length; b++) {
-    let best = Infinity, pa = 0, pb = 0;
-    for (let i = 0; i < rim[a].length; i += 2) { const ka = rim[a][i], xa = ka % W, ya = (ka / W) | 0;
-      for (let j = 0; j < rim[b].length; j += 2) { const kb = rim[b][j], d = (kb % W - xa) ** 2 + (((kb / W) | 0) - ya) ** 2; if (d < best) { best = d; pa = ka; pb = kb; } } }
-    if (best > 18 * 18) continue;
+  // 一番近い点どうしだけで調べると、前線が雲域の輪郭を横切るあたり（灰色の線のすぐそば）を選んでしまい、まとめられないことがある。
+  //   そこで近い点の組（18 画素以内）をいくつも調べ、どれか 1 つでも灰色の線を通らずに結べれば同じ雲域とする（2026-10-26）
+  const crossesGray = (pa, pb) => {
     const x0 = pa % W, y0 = (pa / W) | 0, x1 = pb % W, y1 = (pb / W) | 0, n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
-    let gray = false;
-    for (let t = 0; t <= n && !gray; t++) { const x = Math.round(x0 + (x1 - x0) * t / n), y = Math.round(y0 + (y1 - y0) * t / n);
-      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) if (grayMask[(y + dy) * W + x + dx]) { gray = true; break; } }
-    if (!gray) par[f(a)] = f(b);
+    for (let t = 0; t <= n; t++) { const x = Math.round(x0 + (x1 - x0) * t / n), y = Math.round(y0 + (y1 - y0) * t / n);
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) if (grayMask[(y + dy) * W + x + dx]) return true; }
+    return false;
+  };
+  for (let a = 0; a < parts.length; a++) for (let b = a + 1; b < parts.length; b++) {
+    const cand = [];
+    for (let i = 0; i < rim[a].length; i += 2) { const ka = rim[a][i], xa = ka % W, ya = (ka / W) | 0;
+      for (let j = 0; j < rim[b].length; j += 2) { const kb = rim[b][j], d = (kb % W - xa) ** 2 + (((kb / W) | 0) - ya) ** 2; if (d <= 18 * 18) cand.push([d, ka, kb]); } }
+    if (!cand.length) continue;
+    cand.sort((p, q) => p[0] - q[0]);
+    const tries = cand.length <= 40 ? cand : Array.from({ length: 40 }, (_, i) => cand[Math.floor(i * (cand.length - 1) / 39)]);
+    if (tries.some(([, pa, pb]) => !crossesGray(pa, pb))) par[f(a)] = f(b);
   }
   const by = new Map(); parts.forEach((r, i) => { const k = f(i); (by.get(k) || by.set(k, []).get(k)).push(r); });
   return [...by.values()].map(list => list.length === 1 ? list[0] : { ...list[0], n: list.reduce((s2, r) => s2 + r.n, 0), px: list.flatMap(r => r.px) });
@@ -221,6 +227,21 @@ function outline(reg) {
     const a = (i / N) * 2 * Math.PI - Math.PI, d = far[i] + gap * 0.8;
     return { x: ox + cx + Math.cos(a) * d, y: oy + cy + Math.sin(a) * d };
   });
+}
+
+/** 前線で分かれた雲域の輪郭：かけら（前線の分だけ欠けている）と、それを囲む灰色の線の画素から放射方向の一番外側をとる（2026-10-26） */
+function outlineWithEdge(reg, edge, W) {
+  const { bw, ox, oy } = reg, pts = [];
+  for (const k of reg.px) pts.push([k % bw + ox, ((k / bw) | 0) + oy]);
+  for (const k of edge) pts.push([k % W, (k / W) | 0]);
+  let cx = 0, cy = 0; for (const [x, y] of pts) { cx += x; cy += y; } cx /= pts.length; cy /= pts.length;
+  const N = 72, far = new Float32Array(N);
+  for (const [x, y] of pts) {
+    const dx = x - cx, dy = y - cy, i = Math.round(((Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI)) * N) % N, d = Math.hypot(dx, dy);
+    if (d > far[i]) far[i] = d;
+  }
+  for (let i = 0; i < N; i++) if (!far[i]) far[i] = (far[(i + N - 1) % N] + far[(i + 1) % N]) / 2;
+  return Array.from({ length: N }, (_, i) => { const a = (i / N) * 2 * Math.PI - Math.PI; return { x: cx + Math.cos(a) * far[i], y: cy + Math.sin(a) * far[i] }; });
 }
 
 // ---------------- 本体 ----------------
@@ -414,8 +435,10 @@ export function parseFbjp(src) {
     const extra = g.length > 1 ? frontMask : null;
     // 前線を壁にすると、前線の三角・半円の記号で内側が小さく分かれる。灰色の線をまたがずに隣り合うかけらは 1 つの雲にまとめる
     const edges = extra && atEdge ? { l: c.x0 <= MAP.x0 + 3, r: c.x1 >= MAP.x1 - 3, t: c.y0 <= MAP.y0 + 3, b: c.y1 >= MAP.y1 - 3 } : null;
-    let parts = enclosed(W, H, m, box, 3, extra ? 100 : 900, { frame: atEdge, extra, edges });
-    if (extra) parts = mergeAcrossFront(parts, grayMask, W).filter(r => r.n >= 900);
+    // 前線（と移動方向の矢印・温暖前線の半円）を壁にすると、小さな雲域は内側がいくつもの小さなかけらになる。
+    //   小さなかけらも残してまとめ、まとめた後の大きさで判定する（以前は 900 画素未満を捨てていて、小さな雲域が消えていた。2026-10-26）
+    let parts = enclosed(W, H, m, box, 3, extra ? 20 : 900, { frame: atEdge, extra, edges });
+    if (extra) parts = mergeAcrossFront(parts, grayMask, W).filter(r => r.n >= 300);
     for (const r of parts) {
       r.gid = gid;
       // 輪郭の画素：内側に接する灰色の線
@@ -424,7 +447,7 @@ export function parseFbjp(src) {
         for (let d = 1; d <= 5; d++) for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]]) { const q = (y + dy) * W + x + dx; if (grayMask[q]) edge.add(q); } }
       // 前線の内側だけの区画（輪郭の灰色の線にほとんど接していない）は雲域ではない
       if (extra && edge.size < 40) continue;
-      regions.push({ r, poly: outline(r), edge });
+      regions.push({ r, poly: extra ? outlineWithEdge(r, edge, W) : outline(r), edge });
     }
   }
   // 枠ごとに、灰色の線をたどった距離（引き出し線は、つながる雲域の輪郭に最初に届く）
@@ -467,7 +490,9 @@ export function parseFbjp(src) {
     const fr = b?.fr?.[0];
     // 札の分数は上から 雲（CB など）・乱気流・着氷 の順。乱気流の高さ（揺れが予想される高度）も持っておく
     const tb = b?.fr?.[1];
-    res.clouds.push({ poly: R.poly.map(p => ll(p.x, p.y)), center: ll(cx, cy), cb: !!b?.cb, top: fr?.top ?? null, base: fr?.base ?? null, linked: !!b,
+    // 積乱雲：札に赤い雷マークがある、または雲が下層（FL060 以下）から上層（FL250 以上）まで続く（ISOL CB 360/020 など。雷マークの無い札もあるため。2026-10-26）
+    const cb = !!b?.cb || (fr?.top >= 250 && fr?.base != null && fr.base <= 60);
+    res.clouds.push({ poly: R.poly.map(p => ll(p.x, p.y)), center: ll(cx, cy), cb, top: fr?.top ?? null, base: fr?.base ?? null, linked: !!b,
       box: i ?? null, group: R.r.gid, area: R.r.n,
       turb: tb?.top ? { top: tb.top, base: tb.base ?? fr?.base ?? null } : null });
   });

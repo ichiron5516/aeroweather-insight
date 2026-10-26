@@ -131,6 +131,88 @@ export async function fetchSigwxFor(time = new Date()) {
   throw lastErr || new Error('国際悪天予想図を取得できません');
 }
 
+// ---------- 天気図の一覧（chartsPanel.js）の見本と自動解析（2026-10-26） ----------
+//   見本：東アジア〜西太平洋（90〜170°E・0〜55°N）を Web メルカトルで。背景は国土地理院の標準地図（暗くして、色の区域を見やすく）
+const TH = { w: 90, e: 170, s: 0, n: 55 };
+const lon2x = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
+const lat2y = (lat, z) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 256 * 2 ** z; };
+/** 経度を 0〜360 に寄せる（区域・線ごとにまとめてずらす。日付変更線をまたいでも切れない） */
+const to360 = pts => { if (!pts.length) return pts; const c = pts.reduce((a, p) => a + p.lon, 0) / pts.length, k = Math.round((180 - c) / 360) * 360; return pts.map(p => ({ lat: p.lat, lon: p.lon + k })); };
+const GSI_STD = 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png';
+export async function sigwxCanvas(d, { irTiles = null, airports = [], z = 3, base = GSI_STD } = {}) {
+  const { w, e, s, n } = TH, X0 = lon2x(w, z), X1 = lon2x(e, z), Y0 = lat2y(n, z), Y1 = lat2y(s, z);
+  const cv = document.createElement('canvas'); cv.width = Math.round(X1 - X0); cv.height = Math.round(Y1 - Y0);
+  const g = cv.getContext('2d');
+  g.fillStyle = '#0b141e'; g.fillRect(0, 0, cv.width, cv.height);
+  // 背景の地図（海岸線が分かるように）。取れなければ紺一色
+  let based = false;
+  if (base) {
+    const jobs = [];
+    for (let tx = Math.floor(X0 / 256); tx <= Math.floor(X1 / 256); tx++) for (let ty = Math.floor(Y0 / 256); ty <= Math.floor(Y1 / 256); ty++)
+      jobs.push(new Promise(ok => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { g.drawImage(im, tx * 256 - X0, ty * 256 - Y0); based = true; ok(); }; im.onerror = ok; im.src = base.replace('{z}', z).replace('{x}', tx).replace('{y}', ty); }));
+    await Promise.all(jobs);
+    if (based) { g.fillStyle = 'rgba(10,22,36,0.62)'; g.fillRect(0, 0, cv.width, cv.height); }
+  }
+  if (irTiles) {
+    const jobs = [];
+    for (let tx = Math.floor(X0 / 256); tx <= Math.floor(X1 / 256); tx++) for (let ty = Math.floor(Y0 / 256); ty <= Math.floor(Y1 / 256); ty++)
+      jobs.push(new Promise(ok => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { g.globalAlpha = 0.55; g.drawImage(im, tx * 256 - X0, ty * 256 - Y0); g.globalAlpha = 1; ok(); }; im.onerror = ok; im.src = irTiles.replace('{z}', z).replace('{x}', tx).replace('{y}', ty); }));
+    await Promise.all(jobs);
+  }
+  const P = p => [lon2x(p.lon, z) - X0, lat2y(Math.max(-80, Math.min(80, p.lat)), z) - Y0];
+  const path = (pts, close) => { g.beginPath(); pts.forEach((p, k) => { const [x, y] = P(p); k ? g.lineTo(x, y) : g.moveTo(x, y); }); if (close) g.closePath(); };
+  // 経緯線（10°ごと）
+  g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1;
+  for (let lo = w; lo <= e; lo += 10) { const x = lon2x(lo, z) - X0; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, cv.height); g.stroke(); }
+  for (let la = s; la <= n; la += 10) { const y = lat2y(la, z) - Y0; g.beginPath(); g.moveTo(0, y); g.lineTo(cv.width, y); g.stroke(); }
+  // 区域：着氷 → 乱気流 → 積乱雲 の順に重ねる
+  const order = { ICING: 0, TURB: 1, CB: 2 };
+  for (const a of [...d.areas].sort((p, q) => order[p.kind] - order[q.kind])) {
+    const col = a.kind === 'CB' ? COL.CB : COL[a.kind + (a.sev === 'severe' ? 'severe' : 'moderate')];
+    path(to360(a.ring), true);
+    g.fillStyle = col + (a.kind === 'CB' ? '40' : '2a'); g.fill();
+    g.setLineDash(a.kind === 'CB' ? [] : [5, 3]); g.strokeStyle = col; g.lineWidth = a.kind === 'CB' ? 1.6 : 1.3; g.stroke(); g.setLineDash([]);
+  }
+  // 圏界面（細い黄色）・ジェット気流（太い紫）
+  for (const t of d.trop) { path(to360(t.pts)); g.strokeStyle = COL.TROP + '99'; g.lineWidth = 1; g.stroke(); }
+  for (const j of d.jets) { path(to360(j.pts)); g.strokeStyle = COL.JET; g.lineWidth = 3; g.stroke(); }
+  // 文字（積乱雲の雲頂・ジェットの最大風速）
+  g.font = '600 10px Meiryo, sans-serif';
+  const txt = (x, y, t, c) => { g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(t, x, y); g.fillStyle = c; g.fillText(t, x, y); };
+  for (const a of d.areas.filter(x => x.kind === 'CB')) {
+    const r = to360(a.ring), c = { lat: r.reduce((q, p) => q + p.lat, 0) / r.length, lon: r.reduce((q, p) => q + p.lon, 0) / r.length };
+    const [x, y] = P(c); if (x > 0 && y > 0 && x < cv.width && y < cv.height) txt(x - 12, y + 3, `CB${String(a.top).padStart(3, '0')}`, '#ffd0d0');
+  }
+  for (const j of d.jets) {
+    const q = j.fl.reduce((b, v) => (!b || v.kt > b.kt ? v : b), null); if (!q) continue;
+    const [x, y] = P(to360([{ lat: q.lat, lon: q.lon }])[0]); if (x > 0 && y > 0 && x < cv.width && y < cv.height) txt(x + 4, y - 4, `${q.kt}kt FL${q.fl}`, '#f3dcff');
+  }
+  for (const ap of airports) {
+    const [x, y] = P(ap); if (x < 0 || y < 0 || x > cv.width || y > cv.height) continue;
+    g.fillStyle = '#4fc3f7'; g.beginPath(); g.arc(x, y, 1.8, 0, 7); g.fill();
+  }
+  if (based) { g.font = '9px Meiryo, sans-serif'; txt(cv.width - 118, cv.height - 5, '背景：国土地理院 標準地図', '#9fb3c8'); }
+  return cv;
+}
+/** 自動解析：日本付近（120〜155°E・20〜50°N）にかかる積乱雲・乱気流・着氷・ジェット気流 */
+export function sigwxText(d) {
+  const near = pts => to360(pts).some(p => p.lon >= 120 && p.lon <= 155 && p.lat >= 20 && p.lat <= 50);
+  const F = v => `FL${String(v).padStart(3, '0')}`;
+  const vt = new Date(d.valid.getTime() + 9 * 3600e3);
+  const out = [`（${vt.getUTCMonth() + 1}/${vt.getUTCDate()} ${p2(vt.getUTCHours())}:00 日本時間の予想・T+${d.step}h。日本付近 120〜155°E・20〜50°N にかかるもの）`];
+  const cb = d.areas.filter(a => a.kind === 'CB' && near(a.ring));
+  out.push(cb.length ? `積乱雲 ${cb.length}か所：雲頂は最大 ${F(Math.max(...cb.map(a => a.top)))}。${[...new Set(cb.map(a => EXT[a.ext] || a.ext).filter(Boolean))].join('・')}。巡航高度より高い所は迂回が必要。` : '日本付近に積乱雲の区域はない。');
+  for (const [k, l] of [['TURB', '乱気流'], ['ICING', '着氷']]) {
+    const a = d.areas.filter(x => x.kind === k && near(x.ring));
+    if (!a.length) { out.push(`日本付近に${l}の区域はない。`); continue; }
+    const sv = a.some(x => x.sev === 'severe') ? '強を含む' : '並';
+    out.push(`${l} ${a.length}か所（${sv}）：${[...new Set(a.map(x => `${x.baseKnown ? F(x.base) : 'XXX'}〜${F(x.top)}`))].slice(0, 4).join('、')}。`);
+  }
+  const js = d.jets.filter(j => near(j.pts)).map(j => j.fl.filter(q => near([{ lat: q.lat, lon: q.lon }])).reduce((b, v) => (!b || v.kt > b.kt ? v : b), null)).filter(Boolean);
+  out.push(js.length ? `ジェット気流：最大 ${Math.max(...js.map(q => q.kt))}kt（${js.map(q => `${q.kt}kt ${F(q.fl)}`).join('、')}）。ジェット気流の近く、特に北側（寒気側）と下側は晴天乱気流に注意。` : '日本付近にジェット気流の軸はない。');
+  return out;
+}
+
 // ---------- 画面 ----------
 const CSS = `
 #awSigwx{position:absolute;right:10px;bottom:200px;width:300px;max-height:calc(100vh - 260px);overflow:auto;z-index:30;box-shadow:0 4px 16px rgba(0,0,0,.5);
@@ -148,6 +230,12 @@ const CSS = `
 #awSigwx .lg{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:11px;color:#cfe3f5;margin-top:4px}
 #awSigwx .lg i{display:inline-block;width:14px;height:10px;border:1px solid #47617d;margin-right:3px;vertical-align:-1px}
 #awSigwx .note,#awSigwx .st{font-size:11px;color:#9fb3c8}
+#awSigwx[data-docked]{position:static;width:auto;max-height:none;box-shadow:none;border-radius:6px;margin:6px 0 2px;padding:6px 8px;font-size:12px}
+#awSigwx[data-docked] h3{cursor:default;font-size:13px}
+#awSigwx[data-docked] button{width:auto !important;display:inline-block !important;margin:0 !important;min-height:0 !important;padding:2px 6px !important;font-size:11px !important}
+#awSigwx[data-docked] .tm button{min-width:30px}
+#awSigwx[data-docked] .row,#awSigwx[data-docked] .tm{flex-direction:row !important;align-items:center}
+#awSigwx[data-docked] .note{display:none}
 #awSigwx .pt{font-size:12px;color:#fff;background:rgba(255,255,255,.06);border-radius:5px;padding:4px 6px;margin-top:4px;min-height:1.5em}`;
 
 export function createSigwxPanel(viewer) {
@@ -403,6 +491,7 @@ export function createSigwxPanel(viewer) {
   P.querySelectorAll('[data-m]').forEach(b => b.onclick = async () => {
     S.mode = b.dataset.m;
     P.querySelectorAll('[data-m]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    window.dispatchEvent(new CustomEvent('aw:sigwx', { detail: !P.hidden }));
     if (S.mode === '3d') {
       if (scale() === 1) await window.awSetExag?.(window.AW_EXAG > 1 ? window.AW_EXAG : 25);
       const c = Cesium.Cartographic.fromCartesian(viewer.camera.pickEllipsoid(new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2)) || Cesium.Cartesian3.fromDegrees(135, 34));
@@ -448,7 +537,7 @@ export function createSigwxPanel(viewer) {
   // 見出しをドラッグしてパネルを動かす
   const h3 = $('h3');
   h3.onpointerdown = e => {
-    if (e.target.closest('button')) return;
+    if (e.target.closest('button') || P.dataset.docked) return;
     const r = P.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
     h3.setPointerCapture(e.pointerId);
     h3.onpointermove = m => {
@@ -460,7 +549,7 @@ export function createSigwxPanel(viewer) {
   };
   // 右下（右下のボタン群の上）。GPV のパネルが開いていれば、その左に並べる
   function place() {
-    if (P.hidden || P.dataset.moved) return;
+    if (P.hidden || P.dataset.moved || P.dataset.docked) return;
     const cb = document.getElementById('camButtons')?.getBoundingClientRect();
     const gpv = document.getElementById('awGpv');
     const shift = gpv && !gpv.hidden && !gpv.dataset.moved ? gpv.offsetWidth + 10 : 0;
@@ -477,6 +566,14 @@ export function createSigwxPanel(viewer) {
 
   const api = {
     get on() { return !P.hidden; },
+    get mode() { return S.mode; },
+    /** 地図（map）／3D を切り替える */
+    setMode(m) { const b = P.querySelector(`[data-m="${m}"]`); if (b && S.mode !== m) return b.onclick(); },
+    /** 天気図の一覧（chartsPanel.js）のカードの中に入れる（el = null で地図の上に戻す）（2026-10-26） */
+    dock(el) {
+      if (el) { if (P.parentElement !== el) el.appendChild(P); P.dataset.docked = '1'; P.removeAttribute('style'); }
+      else { delete P.dataset.docked; if (P.parentElement !== document.body) document.body.appendChild(P); place(); }
+    },
     async setVisible(on) {
       P.hidden = !on;
       window.dispatchEvent(new CustomEvent('aw:sigwx', { detail: on }));

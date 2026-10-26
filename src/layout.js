@@ -267,7 +267,9 @@ export function initLayout() {
       { subs: [['struct', '谷・尾根の構造'], ['mode', ''], ['wave', '']] }),
     ck('ct3d', '衛星の雲頂3D', 'ひまわり赤外の雲頂温度から雲頂の高さを求めて、雲を立体で表示', () => $('ct3dBtn')),
     ck('fb3d', '国内悪天3D（FBJP）', '国内悪天予想図のジェット気流・CAT・揺れのある雲を、読み取った高さで立体表示', btn('[data-fb3d]')),
-    panelCk('sw', 'd3', 'sw3d', '国際悪天3D（SIGWX）', '国際悪天予想図（WAFS SIGWX）を、下限〜上限の高さで立体表示'),
+    { ...panelCk('sw', 'd3', 'sw3d', '国際悪天3D（SIGWX）', '国際悪天予想図（WAFS SIGWX）を、下限〜上限の高さで立体表示'),
+      on: () => panelOpen('sw') && window.awSigwx?.mode === '3d',       // 天気図の一覧のカードからも切り替えるので、パネルの今の状態で
+      set: () => { const on = panelOpen('sw') && window.awSigwx?.mode === '3d'; S.sw.d3 = !on; S.sw.map = false; syncPanel('sw'); } },
     panelCk('gpv', 'd3', 'gpv3d', 'GPV 3D（全高度）', '数値予報（GPV）の6つの高さを、それぞれの高度に板として積み重ねる'),
     ck('ax3d', '断面図3D（AXJP）', '高層断面図（AXJP）を、地図の上に縦の壁として立てる', btn('[data-xs3d="axjp"]')),
     ck('fx3d', '断面図3D（FXJP）', '断面図（FXJP）を、地図の上に縦の壁として立てる', btn('[data-xs3d="fxjp"]')),
@@ -408,8 +410,8 @@ export function initLayout() {
   // =====================================================================
   const SHORT = { sfc: '地上', sfc24: '地上24h', aupq78: 'AUPQ78', aupq35: 'AUPQ35', aupa25: 'AUPA25', aupa20: 'AUPA20',
     fxfe502: 'FXFE502', fxfe5782: 'FXFE5782', fxjp854: 'FXJP854', fupa252: 'FUPA252', fupa302: 'FUPA302', fupa502: 'FUPA502',
-    axjp: 'AXJP', fxjp: 'FXJP', typhoon: '台風', fbjp: 'FBJP', vis: '可視', ir: '赤外', radar: 'レーダー', radarIntl: '海外レーダー' };
-  // 図のない項目（数値予報・解析の線・国際悪天・海洋）
+    axjp: 'AXJP', fxjp: 'FXJP', typhoon: '台風', fbjp: 'FBJP', sigwx: '国際悪天', vis: '可視', ir: '赤外', radar: 'レーダー', radarIntl: '海外レーダー' };
+  // 図のない項目（数値予報・解析の線・海洋）。国際悪天は天気図の一覧のカードになった（chartsPanel.js、2026-10-26）
   const ROWS = [];             // { k, l, on(), set(), busy(), grp }
   function setupWx() {
     const P = $('awWx'); if (!P || P.dataset.awGrp) return;
@@ -429,16 +431,13 @@ export function initLayout() {
     // 図のない項目を、種類ごとに一覧の後ろ（国際悪天は FBJP の後ろ）に足す
     const anBtns = [...dash.querySelectorAll('[data-an]')], seaBtns = [...dash.querySelectorAll('[data-sea]')];
     const rowCk = (k, l, t, el) => ({ k, l, t, on: () => isPressed(el()), set: () => el()?.click(), busy: () => loading(el()) || !!el()?.disabled });
-    const swRow = { ...panelCk('sw', 'map', 'w:sw', '国際悪天予想図（SIGWX）', '国際悪天予想図（WAFS SIGWX：積乱雲・乱気流・着氷・ジェット気流・圏界面）を地図に重ねる'), busy: () => false };
     const gpvRow = { ...panelCk('gpv', 'map', 'w:gpv', 'GPV（風・気温・湿り・雲量・降水量）', '数値予報（GPV）の選んだ高さを地図に重ねる。高さ・要素はパネルで選ぶ'), busy: () => false };
     const anRows = anBtns.map(b => rowCk(`w:an:${b.dataset.an}`, b.textContent.trim(), b.title, () => b));
     const seaRows = seaBtns.map(b => rowCk(`w:sea:${b.dataset.sea}`, b.dataset.sea === 'sst' ? '海面水温' : '海流', b.title, () => b));
-    ROWS.push(swRow, gpvRow, ...anRows, ...seaRows);
+    ROWS.push(gpvRow, ...anRows, ...seaRows);
     const rowHtml = r => `<button class="awRow" data-row="${r.k}" aria-pressed="false" title="${esc(r.t)}"><span>${esc(r.l)} <span class="ld"></span></span><span class="n"></span></button>`;
     const grpEl = g => Object.assign(document.createElement('div'), { className: 'grp', textContent: g });
     const itEl = (rows, extra = '') => { const d = document.createElement('div'); d.className = 'it awRowIt'; d.innerHTML = rows.map(rowHtml).join('') + extra; return d; };
-    const fb = P.querySelector('.it[data-id="fbjp"]');
-    if (fb) fb.after(itEl([swRow]));
     P.append(grpEl('数値予報・解析'), itEl([gpvRow, ...anRows]));
     const anSt = $('awAnSt'); if (anSt) P.lastElementChild.appendChild(anSt);
     P.append(grpEl('海洋'), itEl(seaRows));
